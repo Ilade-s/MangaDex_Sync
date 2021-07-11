@@ -112,6 +112,8 @@ for m in dataSearch["results"]:
     i = 0
     nNewImgs = 0
     previousChap = "-1"
+    # create session
+    session = req.Session()
     # create progress bar for chapters 
     prgbar = Progress()
     prgbar.start()
@@ -133,7 +135,7 @@ for m in dataSearch["results"]:
             #print(f"\tChapter {chap} volume {vol} ({round(i/len(chapters)*100, ndigits=1)}%)")
             if baseServer == "":
                 # request to get the M@H server
-                rServ = req.get(f"{base}/at-home/server/{id}")
+                rServ = session.get(f"{base}/at-home/server/{id}")
                 #print(f"Status code server get {name} :", rServ.status_code)
                 dataServer = rServ.json()
                 baseServer = dataServer["baseUrl"]
@@ -152,8 +154,8 @@ for m in dataSearch["results"]:
                             pass
                         with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.png", "x+") as file: # jpg for smaller size
                             # request to get the image if not already downloaded
-                            rImg = req.get(f"{baseServer}/data/{hash}/{img}")
-                            #rImg = req.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
+                            rImg = session.get(f"{baseServer}/data/{hash}/{img}")
+                            #rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
                             # write data to file
                             #print(rImg.content)
                             file.buffer.write(rImg.content)
@@ -168,8 +170,8 @@ for m in dataSearch["results"]:
                             pass
                         with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.png", "x+") as file: # jpg for smaller size
                             # request to get the image if not already downloaded
-                            rImg = req.get(f"{baseServer}/data/{hash}/{img}")
-                            #rImg = req.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
+                            rImg = session.get(f"{baseServer}/data/{hash}/{img}")
+                            #rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
                             # write data to file
                             #print(rImg.content)
                             file.buffer.write(rImg.content)
