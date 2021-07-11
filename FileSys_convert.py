@@ -12,8 +12,7 @@ from rich.progress import * # progress bar
 
 print("============================================")
 print("[bold red]WARNING : this converter uses search.json to convert ALL search results from a file system from another :[/bold red]")
-print("\t- The search.json file must be the same used to download the mangas orginally")
-print("\t- Incomplete archives can be used but aren't recommended (can cause problems)")
+print("Incomplete archives can be used but [bold red]aren't recommended[/bold red] (can cause problems)")
 print("============================================")
 # confirmation of the mangas to convert
 with open("search.json", "r", encoding="UTF-8") as file:
@@ -51,7 +50,7 @@ for m in dataSearch["results"]:
                                     if c["data"]["attributes"]["chapter"] != None 
                                     else 0))
 
-    print("Replacing images...")
+    print("[italic]Replacing images...[/italic]")
     baseServer = ""
     previousChap = ""
     # for each chapter
@@ -92,7 +91,7 @@ for m in dataSearch["results"]:
                 except FileNotFoundError:
                     pass
             # ==============================================================
-            else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.* (à fix)
+            else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
                 for img in imgPaths: # for each image
                     # create folder
                     os.makedirs(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}", exist_ok=True) 
