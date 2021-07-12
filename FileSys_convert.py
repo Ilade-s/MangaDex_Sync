@@ -56,7 +56,7 @@ for m in dataSearch["results"]:
     idManga = m["data"]["id"]
     name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
 
-    with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
+    with open(os.path.join(name, "chapters.json"), "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
         chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
@@ -88,9 +88,9 @@ for m in dataSearch["results"]:
             if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
                 for img in imgPaths: # for each image
                     try:
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "r+") as ofile:
+                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
                             try:
-                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "x+") as file:
+                                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
                                     file.buffer.write(ofile.buffer.read()) 
                             except FileExistsError:
                                 pass
@@ -98,20 +98,20 @@ for m in dataSearch["results"]:
                         pass
                     prgbar.advance(prgbar.task_ids[-1])
                 try:
-                    for img in os.listdir(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}"):
-                        os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/{img}")
-                    os.rmdir(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}")
+                    for img in os.listdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")):
+                        os.remove(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", img))
+                    os.rmdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
                 except FileNotFoundError:
                     pass
             # ==============================================================
             else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
                 for img in imgPaths: # for each image
                     # create folder
-                    os.makedirs(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}", exist_ok=True) 
+                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 
                     try:
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "r+") as ofile: # or jpg for smaller size
+                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile: # or jpg for smaller size
                             try:
-                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # or jpg for smaller size
+                                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file: # or jpg for smaller size
                                     file.buffer.write(ofile.buffer.read()) 
                             except FileExistsError:
                                 pass

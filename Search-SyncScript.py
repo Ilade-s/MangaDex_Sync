@@ -168,10 +168,10 @@ for m in dataSearch["results"]:
                         # NORMAL FILE SYSTEM ({vol}/{chap}-{page}.*)
                         # (easier for browsing pictures but harder to view in explorer)
                         try:
-                            os.makedirs(f"{name}/chapters/vol-{vol}") # create folder
+                            os.makedirs(os.path.join(name, "chapters", f"vol-{vol}")) # create folder
                         except Exception:
                             pass
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # jpg for smaller size
+                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
                             # request to get the image if not already downloaded
                             if qChoice:
                                 rImg = session.get(f"{baseServer}/data/{hash}/{img}")
@@ -184,10 +184,10 @@ for m in dataSearch["results"]:
                         # OTHER FILE SYSTEM ({vol}/{chap}/{page}.*)
                         # (easier for browsing in explorer but reading is harder)
                         try:
-                            os.makedirs(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}") # create folder
+                            os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
                         except Exception:
                             pass
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # jpg for smaller size
+                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
                             # request to get the image if not already downloaded
                             if qChoice:
                                 rImg = session.get(f"{baseServer}/data/{hash}/{img}")
