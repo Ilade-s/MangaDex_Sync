@@ -21,7 +21,7 @@ import os # IO (mkdir)
 
 title = input("Search title : ")
 print("============================================")
-print("File system :")
+print("[bold green]File system :[/bold green]")
 print("\t- 0 : vol/chap/page.* : \n\t\teasier to browse but harder to read chapters")
 print("\t- 1 : vol/chap-page.* : \n\t\teasier to read chapters but harder to browse")
 print("\t- empty : will stop after search (creation of search.json), for convert.py")
@@ -36,12 +36,26 @@ if fsChoice: # if not empty
         exit()
 else:
     StopAfterSearch = True
+# ask for file quality if the script doesn't stop after search
+if not StopAfterSearch:
+    print("============================================")
+    print("[bold green]File quality :[/bold green]")
+    print("\t- 0 : jpg files (compressed) : smaller by around 20-30%")
+    print("\t- 1 : png files (orginal quality) : normal size")
+    print("============================================")
+    qChoice = input("Choice (0 or 1) : ")
+    if qChoice: # if not empty
+        try:
+            qChoice = int(qChoice)
+        except Exception:
+            print("[bold red]Invalid choice[/bold red]")
+            exit()
 
 base = "https://api.mangadex.org"
 
 payload = {
     "title": title,
-    "limit": 1, # numbers of results wanted
+    "limit": 1, # numbers of results wanted (1 is recommended)
     # tag exemples
 #    "includedTags[]": "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
 #    "includedTags[]": "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
@@ -57,8 +71,12 @@ with open("search.json", "w+", encoding="UTF-8") as file:
     json.dump(data, file)
 
 print("Search results...")
-for m in data["results"]:
-    print("\t",m["data"]["attributes"]["title"]["en"])
+if data["results"]: # results found
+    for m in data["results"]:
+        print("\t",m["data"]["attributes"]["title"]["en"])
+else: # no results found
+    print("\t[bold red]No results ![/bold red]")
+    exit()
 
 with open("search.json", "r", encoding="UTF-8") as file:
     dataSearch = json.load(file)
@@ -123,8 +141,9 @@ for m in dataSearch["results"]:
         vol = c["data"]["attributes"]["volume"]
         chap = c["data"]["attributes"]["chapter"]
         id = c["data"]["id"]
-        imgPaths = c["data"]["attributes"]["data"] # ["dataSaver"] for jpg (smaller size)
+        imgPaths = c["data"]["attributes"][("data" if qChoice else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
         hash = c["data"]["attributes"]["hash"]
+        fileFormat = "png" if qChoice else "jpg"
         try:
             title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?"), c["data"]["attributes"]["title"])))
         except Exception as e:
@@ -152,14 +171,14 @@ for m in dataSearch["results"]:
                             os.makedirs(f"{name}/chapters/vol-{vol}") # create folder
                         except Exception:
                             pass
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.png", "x+") as file: # jpg for smaller size
+                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # jpg for smaller size
                             # request to get the image if not already downloaded
-                            rImg = session.get(f"{baseServer}/data/{hash}/{img}")
-                            #rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
+                            if qChoice:
+                                rImg = session.get(f"{baseServer}/data/{hash}/{img}")
+                            else:
+                                rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
                             # write data to file
-                            #print(rImg.content)
                             file.buffer.write(rImg.content)
-                            nNewImgs += 1
                     else:
                         # ==============================================================
                         # OTHER FILE SYSTEM ({vol}/{chap}/{page}.*)
@@ -168,13 +187,15 @@ for m in dataSearch["results"]:
                             os.makedirs(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}") # create folder
                         except Exception:
                             pass
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.png", "x+") as file: # jpg for smaller size
+                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # jpg for smaller size
                             # request to get the image if not already downloaded
-                            rImg = session.get(f"{baseServer}/data/{hash}/{img}")
-                            #rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
+                            if qChoice:
+                                rImg = session.get(f"{baseServer}/data/{hash}/{img}")
+                            else:
+                                rImg = session.get(f"{baseServer}/data-saver/{hash}/{img}") # jpg (smaller size)
                             # write data to file
-                            #print(rImg.content)
                             file.buffer.write(rImg.content)
+                    nNewImgs += 1
                 except FileExistsError:
                     pass
                 prgbar.advance(prgbar.task_ids[-1])

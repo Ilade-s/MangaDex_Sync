@@ -19,25 +19,38 @@ with open("search.json", "r", encoding="UTF-8") as file:
     dataSearch = json.load(file)
     titlelist = ["".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"]))) 
             for m in dataSearch["results"]]
-confimttl = input(f"Mangas to convert : {titlelist} \n\tIs this correct (y or n) ? ")
-if confimttl != "y":
-    print("Conversion cancelled")
+confirm = input(f"Mangas to convert : {titlelist} \n\tIs this correct (y or n) ? ")
+if confirm != "y":
+    print("[bold red]Conversion cancelled[/bold red]")
     exit()
-# Choice of file system
+# search of file system
 print("============================================")
-print("File system to convert to :")
+print("File systems :")
 print("\t- 0 : [bold red]vol/chap/page.*[/bold red] : \n\t\teasier to browse but harder to read chapters")
 print("\t- 1 : [bold red]vol/chap-page.*[/bold red] : \n\t\teasier to read chapters but harder to browse")
 print("============================================")
-try:
-    fsChoice = int(input("Choice (0 or 1) : "))
-    if fsChoice not in (0, 1):
-        print(f"Invalid choice '{fsChoice}'")
-        exit()
-except Exception:
-    print("Invalid choice")
+pathAll = os.path.join(titlelist[0], "chapters")
+currentFS = ("vol/chap-page.*" if [file for file in os.listdir(os.path.join(pathAll, os.listdir(pathAll)[0])) 
+                                    if os.path.isfile(os.path.join(pathAll, os.listdir(pathAll)[0], file))] 
+        else "vol/chap/page.*") # check if there is files in volumes folders to know the file system
+print(f"Current file system : [bold green]{currentFS}[/bold green]")
+fsChoice = (1 if currentFS == "vol/chap/page.*" else 0)
+confirm = input(f"\tFile system to convert to : {fsChoice} \n\tIs this correct (y or n) ? ")
+if confirm != "y":
+    print("[bold red]Conversion cancelled[/bold red]")
     exit()
-
+# search of the file quality
+if fsChoice:
+    pathVol = os.path.join(pathAll, os.listdir(pathAll)[0])
+    pathChap = os.path.join(pathVol, os.listdir(pathVol)[0])
+    quality = (1 if os.path.join(pathChap, os.listdir(pathChap)[0])[-3:] == "png" else 0)
+else:
+    quality = (1 if os.listdir(os.path.join(pathAll, os.listdir(pathAll)[0]))[0][-3:] == "png" else 0)
+fileFormat = ("png" if quality else "jpg")
+confirm = input(f"File format : {fileFormat} \n\tIs this correct (y or n) ? ")
+if confirm != "y":
+    print("[bold red]Conversion cancelled[/bold red]")
+    exit()
 # for each manga
 for m in dataSearch["results"]:
     idManga = m["data"]["id"]
@@ -75,9 +88,9 @@ for m in dataSearch["results"]:
             if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
                 for img in imgPaths: # for each image
                     try:
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.png", "r+") as ofile:
+                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "r+") as ofile:
                             try:
-                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.png", "x+") as file:
+                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "x+") as file:
                                     file.buffer.write(ofile.buffer.read()) 
                             except FileExistsError:
                                 pass
@@ -96,13 +109,13 @@ for m in dataSearch["results"]:
                     # create folder
                     os.makedirs(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}", exist_ok=True) 
                     try:
-                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.png", "r+") as ofile: # or jpg for smaller size
+                        with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}", "r+") as ofile: # or jpg for smaller size
                             try:
-                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.png", "x+") as file: # or jpg for smaller size
+                                with open(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}/page-{imgPaths.index(img)+1}.{fileFormat}", "x+") as file: # or jpg for smaller size
                                     file.buffer.write(ofile.buffer.read()) 
                             except FileExistsError:
                                 pass
-                        os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.png")
+                        os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}")
                     except FileNotFoundError:
                         pass
                     prgbar.advance(prgbar.task_ids[-1])
