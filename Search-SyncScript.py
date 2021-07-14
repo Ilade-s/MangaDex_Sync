@@ -26,6 +26,7 @@ print("By Merlet Raphaël")
 print("============================================")
 newSync = (1 if input("Search for a new manga (or update existant one) (y/N) ? ") == "y" else 0)
 
+# User interaction
 if newSync: # Search for a new manga and ask for storage choices
     title = input("Search title : ")
     print("============================================")
@@ -117,35 +118,35 @@ else: # Ask which manga(s) must be updated
     
 # for each manga
 for m in dataSearch["results"] if newSync else mList:
+    # get necessary infos (by search.json or by infos.json)
     if newSync:
         idManga = m["data"]["id"]
         name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
-        with open(f"{name}/infos.json", "w+", encoding="UTF-8") as file:
-            mangaInfos = {
-                "fileSys" : fsChoice,
-                "format" : qChoice,
-                "id": idManga,
-                "name" : name
-            }
-            json.dump(mangaInfos, file)
+        if name not in os.listdir(os.getcwd()):
+            os.mkdir(f"{os.getcwd()}/{name}")
+        try:
+            with open(f"{name}/infos.json", "x+", encoding="UTF-8") as file:
+                mangaInfos = {
+                    "fileSys" : fsChoice,
+                    "format" : qChoice,
+                    "id": idManga,
+                    "name" : name
+                }
+                json.dump(mangaInfos, file)
+        except FileExistsError: pass
+    
     else:
         name = m
-
-        with open(f"{name}/infos.json", "r", encoding="UTF-8") as file:
+        with open(os.path.join(name, "infos.json"), "r", encoding="UTF-8") as file:
             mangaInfos = json.load(file)
         idManga = mangaInfos["id"]
         qChoice = mangaInfos["format"]
         fsChoice = mangaInfos["fileSys"]
 
-
     payloadManga = {
         "translatedLanguage[]": "fr",
         "translatedLanguage[]": "en",
     }  
-
-    #print(r2.json())
-    if name not in os.listdir(os.getcwd()):
-        os.mkdir(f"{os.getcwd()}/{name}")
 
     with open(f"{name}/aggregate.json", "w+", encoding="UTF-8") as file:
         r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)

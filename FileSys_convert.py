@@ -11,50 +11,54 @@ from rich import print # pretty print
 from rich.progress import * # progress bar
 
 print("============================================")
-print("[bold red]WARNING : this converter uses search.json to convert ALL search results from a file system from another :[/bold red]")
-print("Incomplete archives can be used but [bold red]aren't recommended[/bold red] (can cause problems)")
+print("File system convertissor :")
+print("\t- This converter uses the infos.json file to gather infos about the settings of the folder")
+print("\t- You [bold red]do not[/bold red] need to edit this file")
+print("\t- Incomplete archives can be used but [bold red]aren't recommended[/bold red] (can cause problems)")
+print("\t- Please don't stop the conversion while in execution as it will break the folder")
 print("============================================")
-# confirmation of the mangas to convert
-with open("search.json", "r", encoding="UTF-8") as file:
-    dataSearch = json.load(file)
-    titlelist = ["".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"]))) 
-            for m in dataSearch["results"]]
-confirm = input(f"Mangas to convert : {titlelist} \n\tIs this correct (y or n) ? ")
-if confirm != "y":
-    print("[bold red]Conversion cancelled[/bold red]")
+# choice of mangas to convert
+folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f]
+if not folderList: # if no folders have been found
+    print("No mangas found in working directory !")
     exit()
-# search of file system
+print("Manga choice :")
+for i in range(len(folderList)):
+    print(f"\t{i} : {folderList[i]}")
 print("============================================")
-print("File systems :")
-print("\t- 0 : [bold red]vol/chap/page.*[/bold red] : \n\t\teasier to browse but harder to read chapters")
-print("\t- 1 : [bold red]vol/chap-page.*[/bold red] : \n\t\teasier to read chapters but harder to browse")
-print("============================================")
-pathAll = os.path.join(titlelist[0], "chapters")
-currentFS = ("vol/chap-page.*" if [file for file in os.listdir(os.path.join(pathAll, os.listdir(pathAll)[0])) 
-                                    if os.path.isfile(os.path.join(pathAll, os.listdir(pathAll)[0], file))] 
-        else "vol/chap/page.*") # check if there is files in volumes folders to know the file system
-print(f"Current file system : [bold green]{currentFS}[/bold green]")
-fsChoice = (1 if currentFS == "vol/chap/page.*" else 0)
-confirm = input(f"\tFile system to convert to : {fsChoice} \n\tIs this correct (y or n) ? ")
-if confirm != "y":
-    print("[bold red]Conversion cancelled[/bold red]")
-    exit()
-# search of the file quality
-if fsChoice:
-    pathVol = os.path.join(pathAll, os.listdir(pathAll)[0])
-    pathChap = os.path.join(pathVol, os.listdir(pathVol)[0])
-    quality = (1 if os.path.join(pathChap, os.listdir(pathChap)[0])[-3:] == "png" else 0)
+mChoice = input(f"Choice (all if empty) (space between values): ")
+if not mChoice:
+    titlelist = folderList
 else:
-    quality = (1 if os.listdir(os.path.join(pathAll, os.listdir(pathAll)[0]))[0][-3:] == "png" else 0)
-fileFormat = ("png" if quality else "jpg")
-confirm = input(f"File format : {fileFormat} \n\tIs this correct (y or n) ? ")
-if confirm != "y":
-    print("[bold red]Conversion cancelled[/bold red]")
-    exit()
+    try:
+        titlelist = [folderList[int(i)] for i in mChoice.split(" ")]
+    except Exception:
+        print("[bold red]Invalid choice[/bold red]")
+        exit()
 # for each manga
-for m in dataSearch["results"]:
-    idManga = m["data"]["id"]
-    name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
+for m in titlelist:
+    print(f"[bold blue]{m}[/bold blue]")
+    with open(os.path.join(m, "infos.json"), "r", encoding="UTF-8") as file:
+        mangaInfos = json.load(file)
+
+    idManga = mangaInfos["id"]
+    name = mangaInfos["name"]
+    fileFormat = ("png" if int(mangaInfos["format"]) else "jpg")
+    print(f"Format : {fileFormat}")
+    cfsChoice = int(mangaInfos["fileSys"])
+    fsChoice = 0 if cfsChoice else 1
+    
+    (cfs, fs) = ("vol/chap-page.*", "vol/chap/page.*") if cfsChoice else ("vol/chap/page.*", "vol/chap-page.*")
+    print(f"Current file system : [bold green]{cfs}[/bold green]")
+    confirm = input(f"\tFile system to convert to : {fs} \n\tIs this correct (y/N) ? ")
+    if confirm != "y":
+        print(f"[bold red]Conversion of {m} cancelled[/bold red]")
+        continue
+
+    mangaInfos["fileSys"] = fsChoice
+    with open(os.path.join(m, "infos.json"), "w", encoding="UTF-8") as file:
+        json.dump(mangaInfos, file)
+            
 
     with open(os.path.join(name, "chapters.json"), "r", encoding="UTF-8") as file:
         chapters = json.load(file)
