@@ -18,107 +18,150 @@ from rich import print # pretty print
 from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
+base = "https://api.mangadex.org"
 
-title = input("Search title : ")
 print("============================================")
-print("[bold green]File system :[/bold green]")
-print("\t- 0 : vol/chap/page.* : \n\t\teasier to browse but harder to read chapters")
-print("\t- 1 : vol/chap-page.* : \n\t\teasier to read chapters but harder to browse")
-print("\t- empty : will stop after search (creation of search.json), for convert.py")
+print("Mangadex Downloader/Sync script")
+print("By Merlet Raphaël")
 print("============================================")
-fsChoice = input("Choice (0 or 1 or empty) : ")
-if fsChoice: # if not empty
-    try:
-        fsChoice = int(fsChoice)
-        StopAfterSearch = False
-    except Exception:
-        print("[bold red]Invalid choice[/bold red]")
-        exit()
-else:
-    StopAfterSearch = True
-# ask for file quality if the script doesn't stop after search
-if not StopAfterSearch:
+newSync = (1 if input("Search for a new manga (or update existant one) (y/N) ? ") == "y" else 0)
+
+if newSync: # Search for a new manga and ask for storage choices
+    title = input("Search title : ")
     print("============================================")
-    print("[bold green]File quality :[/bold green]")
-    print("\t- 0 : jpg files (compressed) : smaller by around 20-30%")
-    print("\t- 1 : png files (orginal quality) : normal size")
+    print("[bold green]File system :[/bold green]")
+    print("\t- 0 : vol/chap/page.* : \n\t\teasier to browse but harder to read chapters")
+    print("\t- 1 : vol/chap-page.* : \n\t\teasier to read chapters but harder to browse")
+    print("\t- empty : will stop after search (creation of search.json), for convert.py")
     print("============================================")
-    qChoice = input("Choice (0 or 1) : ")
-    if qChoice: # if not empty
+    fsChoice = input("Choice (0 or 1 or empty) : ")
+    if fsChoice: # if not empty
+        try:
+            fsChoice = int(fsChoice)
+            StopAfterSearch = False
+        except Exception:
+            print("[bold red]Invalid choice[/bold red]")
+            exit()
+    else:
+        StopAfterSearch = True
+    # ask for file quality if the script doesn't stop after search
+    if not StopAfterSearch:
+        print("============================================")
+        print("[bold green]File quality :[/bold green]")
+        print("\t- 0 : jpg files (compressed) : smaller by around 20-30%")
+        print("\t- 1 : png files (orginal quality) : normal size")
+        print("============================================")
+        qChoice = input("Choice (0 or 1) : ")
         try:
             qChoice = int(qChoice)
         except Exception:
             print("[bold red]Invalid choice[/bold red]")
             exit()
 
-base = "https://api.mangadex.org"
+    payload = {
+        "title": title,
+        "limit": 1, # numbers of results wanted (1 is recommended)
+        # tag exemples
+    #    "includedTags[]": "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
+    #    "includedTags[]": "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+    # you can edit this dictionary by adding tags (like above, exemples in tags.json)
+    }
+    r = req.get(f"{base}/manga", params=payload)
+    #print(r.text)
+    print("Status code search :", r.status_code)
 
-payload = {
-    "title": title,
-    "limit": 1, # numbers of results wanted (1 is recommended)
-    # tag exemples
-#    "includedTags[]": "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
-#    "includedTags[]": "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
-# you can edit this dictionary by adding tags (like above, exemples in tags.json)
-}
-r = req.get(f"{base}/manga", params=payload)
-#print(r.text)
-print("Status code search :", r.status_code)
+    data = r.json()
+    #print(data)
+    with open("search.json", "w+", encoding="UTF-8") as file:
+        json.dump(data, file)
 
-data = r.json()
-#print(data)
-with open("search.json", "w+", encoding="UTF-8") as file:
-    json.dump(data, file)
+    print("Search results...")
+    if data["results"]: # results found
+        for m in data["results"]:
+            print("\t",m["data"]["attributes"]["title"]["en"])
+    else: # no results found
+        print("\t[bold red]No results ![/bold red]")
+        exit()
 
-print("Search results...")
-if data["results"]: # results found
-    for m in data["results"]:
-        print("\t",m["data"]["attributes"]["title"]["en"])
-else: # no results found
-    print("\t[bold red]No results ![/bold red]")
-    exit()
-
-with open("search.json", "r", encoding="UTF-8") as file:
-    dataSearch = json.load(file)
+    with open("search.json", "r", encoding="UTF-8") as file:
+        dataSearch = json.load(file)
+        
+    if StopAfterSearch:   
+        exit() # to stop after search (for convert)
     
-if StopAfterSearch:   
-    exit() # to stop after search (for convert)
+    # Search confirmation
+    confimttl = (1 if input("Is this correct (y/N) ? ") == "y" else 0)
+    if not confimttl:
+        print("[bold red]Synchronisation cancelled[/bold red]")
+        exit()
 
-# Search confirmation
-confimttl = input("Is this correct (y or n) ? ")
-if confimttl != "y":
-    print("[bold red]Synchronisation cancelled[/bold red]")
-    exit()
+else: # Ask which manga(s) must be updated
+    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f]
+    if not folderList: # if no folders have been found
+        print("No mangas found in working directory !")
+        exit()
+    print("============================================")
+    print("Manga choice :")
+    for i in range(len(folderList)):
+        print(f"\t{i} : {folderList[i]}")
+    print("============================================")
+    mChoice = input(f"Choice (all if empty) (space between values): ")
+    if not mChoice:
+        mList = folderList
+    else:
+        try:
+            mList = [folderList[int(i)] for i in mChoice.split(" ")]
+        except Exception:
+            print("[bold red]Invalid choice[/bold red]")
+            exit()
     
 # for each manga
-for m in dataSearch["results"]:
-    idManga = m["data"]["id"]
-    name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
-    
+for m in dataSearch["results"] if newSync else mList:
+    if newSync:
+        idManga = m["data"]["id"]
+        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
+        with open(f"{name}/infos.json", "w+", encoding="UTF-8") as file:
+            mangaInfos = {
+                "fileSys" : fsChoice,
+                "format" : qChoice,
+                "id": idManga,
+                "name" : name
+            }
+            json.dump(mangaInfos, file)
+    else:
+        name = m
+
+        with open(f"{name}/infos.json", "r", encoding="UTF-8") as file:
+            mangaInfos = json.load(file)
+        idManga = mangaInfos["id"]
+        qChoice = mangaInfos["format"]
+        fsChoice = mangaInfos["fileSys"]
+
+
     payloadManga = {
         "translatedLanguage[]": "fr",
         "translatedLanguage[]": "en",
     }  
-
-    r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)
-    print(f"Status code aggregate {name} :", r2.status_code)
-    mangaList = r2.json()
-
-    payloadManga["limit"] = 500
-    r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
-    print(f"Status code feed {name} :", r3.status_code)
-    mangaFeed = r3.json()
 
     #print(r2.json())
     if name not in os.listdir(os.getcwd()):
         os.mkdir(f"{os.getcwd()}/{name}")
 
     with open(f"{name}/aggregate.json", "w+", encoding="UTF-8") as file:
+        r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)
+        print(f"Status code aggregate {name} :", r2.status_code)
+        mangaList = r2.json()
+
         json.dump(mangaList["volumes"], file)
     
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
+        payloadManga["limit"] = 500
+        r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+        print(f"Status code feed {name} :", r3.status_code)
+        mangaFeed = r3.json()
+
         json.dump(mangaFeed["results"], file)
-    
+
     with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
