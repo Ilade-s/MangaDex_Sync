@@ -77,8 +77,10 @@ if newSync: # Search for a new manga and ask for storage choices
         "title": title,
         "limit": 1, # numbers of results wanted (1 is recommended)
         # tag exemples
-    #    "includedTags[]": "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
-    #    "includedTags[]": "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+#        "includedTags[]": [
+#            "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
+#            "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+#        ]
     # you can edit this dictionary by adding tags (like above, exemples in tags.json)
     }
     r = req.get(f"{base}/manga", params=payload)
