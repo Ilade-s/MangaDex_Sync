@@ -1,13 +1,12 @@
 """
 Simple script using the MangaDex public API to search and get/sync mangas and store it in folders :
-    - don't have to be logged in to use it
-    - title is asked in console but tags must be added directly into the search payload (l.42)
-    - the download might be long, and thus a progress bar is rendered using the rich module (must be installed)
-    - you can choose between two file system to save pictures, but if you want to change afterward, you can use the FileSys_convert.py script
-    - .json files are used to store responses from the server and are kept after sync, so it is possible to read them
-    - you can stop the script halfway in and restart it after, it will pass already dowloaded pictures (so the script can update mangas already synced before with only the new content)
-    - the mangas folders will be stored in the working directory so be careful of where you launch the script from
-    - the script only ask for one result but this can be changed by changing the value in the limit key of the search payload (l.42)
+    - General infos :
+        - don't have to be logged in to use it
+        - you can update existant archives easily (U as 1st input)
+        - title is asked in console but tags must be added directly into the search payload (l.42)
+        - you can choose between two file system to save pictures, but if you want to change afterward, you can use the FileSys_convert.py script
+        - .json files are used to store responses from the server and are kept after sync, so it is possible to read them
+        - you can stop the script halfway in and restart it after, it will pass already dowloaded pictures (so the script can update mangas already synced before with only the new content)
 Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
     
     Made by Merlet Raphael, 2021
@@ -18,9 +17,8 @@ from rich import print # pretty print
 from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
-# async modules
-import httpx as areq
-import asyncio
+from getChapter import getPages # async func to get pages
+import asyncio # used to run async func
 
 base = "https://api.mangadex.org"
 
@@ -28,50 +26,11 @@ print("============================================")
 print("Mangadex Downloader/Sync script")
 print("By Merlet Raphaël")
 print("============================================")
-newSync = (1 if input("S-earch for a new manga (or U-pdate existant one) (S/U) ? ") == "S" else 0)
-
-async def getPages(imgPaths, hash, quality):
-    """
-    Get all pages from imgPaths from the chapters with the hash
-    """
-    adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
-    # do the requests for each image (asynchronous)
-    async with areq.AsyncClient() as client: 
-        tasks = (client.get(f"{adress}/{img}") for img in imgPaths)  
-        reqs = await asyncio.gather(*tasks)
-
-    images = [rep.content for rep in reqs]
-
-    return images
-
+newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U) ? ") == "S" else 0)
 
 # User interaction
 if newSync: # Search for a new manga and ask for storage choices
     title = input("Search title : ")
-    print("============================================")
-    print("[bold green]File system :")
-    print("\t- 0 : vol/chap/page.* : \n\t\teasier to browse but harder to read chapters")
-    print("\t- 1 : vol/chap-page.* : \n\t\teasier to read chapters but harder to browse")
-    print("============================================")
-    fsChoice = input("Choice (0 or 1) : ")
-    try:
-        fsChoice = int(fsChoice)
-        StopAfterSearch = False
-    except Exception:
-        print("[bold red]Invalid choice")
-        exit()
-    # ask for file quality if the script doesn't stop after search
-    print("============================================")
-    print("[bold green]File quality :[/bold green]")
-    print("\t- 0 : jpg files (compressed) : smaller by around 20-30%")
-    print("\t- 1 : png files (orginal quality) : normal size")
-    print("============================================")
-    qChoice = input("Choice (0 or 1) : ")
-    try:
-        qChoice = int(qChoice)
-    except Exception:
-        print("[bold red]Invalid choice")
-        exit()
 
     payload = {
         "title": title,
@@ -107,6 +66,31 @@ if newSync: # Search for a new manga and ask for storage choices
     confimttl = (1 if input("Is this correct (y/N) ? ") == "y" else 0)
     if not confimttl:
         print("[bold red]Synchronisation cancelled")
+        exit()
+    
+    print("============================================")
+    print("[bold green]File system :")
+    print("\t- 0 : vol/chap/page.* : \n\t\teasier to browse but harder to read chapters")
+    print("\t- 1 : vol/chap-page.* : \n\t\teasier to read chapters but harder to browse")
+    print("============================================")
+    fsChoice = input("Choice (0 or 1) : ")
+    try:
+        fsChoice = int(fsChoice)
+        StopAfterSearch = False
+    except Exception:
+        print("[bold red]Invalid choice")
+        exit()
+    # ask for file quality if the script doesn't stop after search
+    print("============================================")
+    print("[bold green]File quality :[/bold green]")
+    print("\t- 0 : jpg files (compressed) : smaller by around 20-30%")
+    print("\t- 1 : png files (orginal quality) : normal size")
+    print("============================================")
+    qChoice = input("Choice (0 or 1) : ")
+    try:
+        qChoice = int(qChoice)
+    except Exception:
+        print("[bold red]Invalid choice")
         exit()
 
 else: # Ask which manga(s) must be updated
@@ -183,21 +167,20 @@ for m in dataSearch["results"] if newSync else mList:
         # sort the list from the json to make loading of images in order
         chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
                                     if c["data"]["attributes"]["chapter"] != None 
-                                    else 0))                  
+                                    else 0))              
     # request to get the M@H server
     idFirstChap = chapters[0]["data"]["id"]
     rServ = req.get(f"{base}/at-home/server/{idFirstChap}")
     dataServer = rServ.json()
-    #print(dataServer)
     baseServer = dataServer["baseUrl"]
     if newSync:    
         print(f"Retrieving images from server at {baseServer} ... [italic]This might take a while...")
     # for each chapter
     i = 0
     nNewImgs = 0
-    previousChap = "-1"
+    previousChap = ""
     # add manga task
-    prgbar.add_task(f"{name} (chap {i+1})", total=len(chapters))
+    prgbar.add_task(f"{name} (vol 1 chap 1)", total=len(chapters))
     for c in chapters:
         i += 1
         # chapter infos
@@ -219,7 +202,7 @@ for m in dataSearch["results"] if newSync else mList:
             else:
                 imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
             # do all the requests to get the images (bytes)
-            images = asyncio.run(getPages(imgToGet, hash, qChoice)) 
+            images = asyncio.run(getPages(imgToGet, hash, qChoice, baseServer)) 
             # save all images
             for img in images:
                 try:
@@ -247,7 +230,7 @@ for m in dataSearch["results"] if newSync else mList:
                     nNewImgs += 1
                 except FileExistsError:
                     pass
-        prgbar.update(prgbar.task_ids[-1], description=f"{name} (chap {chap})", advance=1)
+        prgbar.update(prgbar.task_ids[-1], description=f"{name} (vol {vol} chap {chap})", advance=1)
         previousChap = chap
     if newSync:
         print(f"{name} have been successfully synced from MangaDex !")

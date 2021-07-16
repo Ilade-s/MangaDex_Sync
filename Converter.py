@@ -68,7 +68,6 @@ for m in titlelist:
                                     else 0))
 
     print("[italic]Replacing images...[/italic]")
-    baseServer = ""
     previousChap = ""
     # for each chapter
     i = 0
