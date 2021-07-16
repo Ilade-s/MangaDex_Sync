@@ -94,7 +94,7 @@ if newSync: # Search for a new manga and ask for storage choices
         exit()
 
 else: # Ask which manga(s) must be updated
-    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f]
+    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f and "__" not in f]
     if not folderList: # if no folders have been found
         print("[bold red]No mangas found in working directory !")
         exit()
@@ -202,7 +202,7 @@ for m in dataSearch["results"] if newSync else mList:
             else:
                 imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
             # do all the requests to get the images (bytes)
-            images = asyncio.run(getPages(imgToGet, hash, qChoice, baseServer)) 
+            images = asyncio.run(getPages(imgToGet, hash, baseServer, qChoice)) 
             # save all images
             for img in images:
                 try:

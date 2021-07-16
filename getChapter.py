@@ -31,7 +31,6 @@ async def getPages(imgPaths: list[str], hash: str, base: str, quality: bool):
 
 if __name__=='__main__':
     pass
-    # fonctionne pas
 #    from argparse import ArgumentParser
 #    # create parser
 #    parser = ArgumentParser(description="Get chapter pages")
