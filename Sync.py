@@ -30,9 +30,26 @@ newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U)
 
 # User interaction
 if newSync: # Search for a new manga and ask for storage choices
-    title = input("Search title : ")
-
-    payload = {
+    print("============================================")
+    print("Search term :")
+    print("\t- 0 : Search engine")
+    print("\t- 1 : Link to manga page")
+    print("============================================")
+    isLink = input("Choice (0 or 1) : ")
+    try:
+        isLink = int(isLink)
+    except Exception:
+        print("[bold red]Invalid choice")
+        exit()
+    
+    if isLink: # link to page (need to get the page)
+        id = input("Adress to manga : ")[-36:]
+        payload = {
+            "ids[]": [id]
+        }
+    else:
+        title = input("Search title : ")
+        payload = {
         "title": title,
         "limit": 5, # numbers of results to choose from (5 by default)
         # tag exemples
@@ -42,6 +59,7 @@ if newSync: # Search for a new manga and ask for storage choices
 #        ]
     # you can edit this dictionary by adding tags (like above, exemples in tags.json)
     }
+
     r = req.get(f"{base}/manga", params=payload)
     #print(r.text)
     print("Status code search :", r.status_code)
@@ -85,7 +103,6 @@ if newSync: # Search for a new manga and ask for storage choices
     fsChoice = input("Choice (0 or 1) : ")
     try:
         fsChoice = int(fsChoice)
-        StopAfterSearch = False
     except Exception:
         print("[bold red]Invalid choice")
         exit()
@@ -155,21 +172,24 @@ for m in mList:
         "translatedLanguage[]": [
 #            "fr", 
             "en"
-        ]
+        ],
+        "limit": 500,
+        "offset": 0
     }  
-
-    #with open(f"{name}/aggregate.json", "w+", encoding="UTF-8") as file:
-    #    r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)
-    #    mangaList = r2.json()
-    #    json.dump(mangaList["volumes"], file)
     
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
         payloadManga["limit"] = 500
         r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
-        #print(f"Status code feed {name} :", r3.status_code)
         mangaFeed = r3.json()
+        chapters = mangaFeed['results']
+        # if manga have 500+ chapters
+        while mangaFeed['total'] > len(mangaFeed['results']) + 500*mangaFeed['offset']:
+            mangaFeed['offset'] += 1 
+            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+            mangaFeed = r3.json()
+            chapters += mangaFeed['results']
 
-        json.dump(mangaFeed["results"], file)
+        json.dump(chapters, file)
 
     with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
         chapters = json.load(file)
