@@ -34,7 +34,7 @@ if newSync: # Search for a new manga and ask for storage choices
 
     payload = {
         "title": title,
-        "limit": 1, # numbers of results wanted (1 is recommended)
+        "limit": 5, # numbers of results to choose from (5 by default)
         # tag exemples
 #        "includedTags[]": [
 #            "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
@@ -51,22 +51,31 @@ if newSync: # Search for a new manga and ask for storage choices
     with open("search.json", "w+", encoding="UTF-8") as file:
         json.dump(data, file)
 
+    print("============================================")
     print("Search results...")
     if data["results"]: # results found
-        for m in data["results"]:
-            print("\t",m["data"]["attributes"]["title"]["en"])
+        for i in range(len(data["results"])):
+            title = data["results"][i]["data"]["attributes"]["title"]["en"]
+            print(f"\t{i} : {title}")
     else: # no results found
         print("\t[bold red]No results !")
         exit()
-
+    print("============================================")
+    
+    
     with open("search.json", "r", encoding="UTF-8") as file:
         dataSearch = json.load(file)
-    
-    # Search confirmation
-    confimttl = (1 if input("Is this correct (y/N) ? ") == "y" else 0)
-    if not confimttl:
-        print("[bold red]Synchronisation cancelled")
-        exit()
+
+    # Search choice
+    mChoice = input(f"Choice (all if empty) (space between values): ")
+    if mChoice:
+        try:
+            mList = [dataSearch["results"][int(i)] for i in mChoice.split(" ")]
+        except Exception:
+            print("[bold red]Invalid choice")
+            exit()
+    else:
+        mList = dataSearch["results"]
     
     print("============================================")
     print("[bold green]File system :")
@@ -94,7 +103,7 @@ if newSync: # Search for a new manga and ask for storage choices
         exit()
 
 else: # Ask which manga(s) must be updated
-    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f and "__" not in f]
+    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "infos.json" in os.listdir(f)]
     if not folderList: # if no folders have been found
         print("[bold red]No mangas found in working directory !")
         exit()
@@ -116,7 +125,7 @@ else: # Ask which manga(s) must be updated
 prgbar = Progress()
 prgbar.start()
 # for each manga
-for m in dataSearch["results"] if newSync else mList:
+for m in mList:
     # get necessary infos (by search.json or by infos.json)
     if newSync:
         idManga = m["data"]["id"]
@@ -143,16 +152,16 @@ for m in dataSearch["results"] if newSync else mList:
         fsChoice = mangaInfos["fileSys"]
 
     payloadManga = {
-        "translatedLanguage[]": "fr",
-        "translatedLanguage[]": "en",
+        "translatedLanguage[]": [
+#            "fr", 
+            "en"
+        ]
     }  
 
-    with open(f"{name}/aggregate.json", "w+", encoding="UTF-8") as file:
-        r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)
-        #print(f"Status code aggregate {name} :", r2.status_code)
-        mangaList = r2.json()
-
-        json.dump(mangaList["volumes"], file)
+    #with open(f"{name}/aggregate.json", "w+", encoding="UTF-8") as file:
+    #    r2 = req.get(f"{base}/manga/{idManga}/aggregate", params=payloadManga)
+    #    mangaList = r2.json()
+    #    json.dump(mangaList["volumes"], file)
     
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
         payloadManga["limit"] = 500
@@ -168,13 +177,6 @@ for m in dataSearch["results"] if newSync else mList:
         chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
                                     if c["data"]["attributes"]["chapter"] != None 
                                     else 0))              
-    # request to get the M@H server
-    idFirstChap = chapters[0]["data"]["id"]
-    rServ = req.get(f"{base}/at-home/server/{idFirstChap}")
-    dataServer = rServ.json()
-    baseServer = dataServer["baseUrl"]
-    if newSync:    
-        print(f"Retrieving images from server at {baseServer} ... [italic]This might take a while...")
     # for each chapter
     i = 0
     nNewImgs = 0
@@ -201,8 +203,14 @@ for m in dataSearch["results"] if newSync else mList:
                 imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
             else:
                 imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
-            # do all the requests to get the images (bytes)
-            images = asyncio.run(getPages(imgToGet, hash, baseServer, qChoice)) 
+            if imgToGet: # if there are images to get
+                # request to get the M@H server
+                rServ = req.get(f"{base}/at-home/server/{id}")
+                dataServer = rServ.json()
+                baseServer = dataServer["baseUrl"]
+                # do all the requests to get the images (bytes)
+                images = asyncio.run(getPages(imgToGet, hash, baseServer, qChoice)) 
+            else: images = []
             # save all images
             for img in images:
                 try:
