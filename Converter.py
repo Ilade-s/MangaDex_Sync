@@ -11,14 +11,14 @@ from rich import print # pretty print
 from rich.progress import * # progress bar
 
 print("============================================")
-print("File system convertissor :")
+print("File system converter :")
 print("\t- This converter uses the infos.json file to gather infos about the settings of the folder")
 print("\t- You [bold red]do not[/bold red] need to edit this file")
 print("\t- Incomplete archives can be used but [bold red]aren't recommended[/bold red] (can cause problems)")
 print("\t- Please don't stop the conversion while in execution as it will break the folder")
 print("============================================")
 # choice of mangas to convert
-folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "." not in f]
+folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "infos.json" in os.listdir(f)]
 if not folderList: # if no folders have been found
     print("No mangas found in working directory !")
     exit()
