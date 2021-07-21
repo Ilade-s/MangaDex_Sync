@@ -45,13 +45,25 @@ if newSync: # Search for a new manga and ask for storage choices
     if isLink: # link to page (need to get the page)
         id = input("Adress to manga : ")[-36:]
         payload = {
-            "ids[]": [id]
+            "ids[]": [id],
+            "contentRating[]": [
+                "safe",
+                "suggestive",
+                "erotica",
+                "pornographic"
+            ]
         }
     else:
         title = input("Search title : ")
         payload = {
         "title": title,
         "limit": 5, # numbers of results to choose from (5 by default)
+        "contentRating[]": [
+            "safe",
+            "suggestive",
+            "erotica",
+            "pornographic"
+        ]
         # tag exemples
 #        "includedTags[]": [
 #            "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
@@ -178,7 +190,6 @@ for m in mList:
     }  
     
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
-        payloadManga["limit"] = 500
         r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         mangaFeed = r3.json()
         chapters = mangaFeed['results']
