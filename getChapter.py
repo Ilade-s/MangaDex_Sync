@@ -29,21 +29,5 @@ async def getPages(imgPaths: list[str], hash: str, base: str, quality: bool):
 
     return images
 
-if __name__=='__main__':
-    pass
-#    from argparse import ArgumentParser
-#    # create parser
-#    parser = ArgumentParser(description="Get chapter pages")
-#    # add args
-#    parser.add_argument("imgPaths", type=list, 
-#                    help="list of strings representing the paths to each page")
-#    parser.add_argument('-s', action='store_false', default=True, # quality
-#                    help="if set, will get jpg images (data [s]aver)")
-#
-#    # get all args in a list
-#    args = vars(parser.parse_args())
-#    argsVals = list(args.values())
-#    
-#    print(argsVals)
 
 

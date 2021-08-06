@@ -69,8 +69,8 @@ if newSync: # Search for a new manga and ask for storage choices
 #            "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
 #            "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
 #        ]
-    # you can edit this dictionary by adding tags (like above, exemples in tags.json)
-    }
+        # you can edit this dictionary by adding tags (like above, exemples in tags.json)
+        }
 
     r = req.get(f"{base}/manga", params=payload)
     #print(r.text)
@@ -194,7 +194,7 @@ for m in mList:
         mangaFeed = r3.json()
         chapters = mangaFeed['results']
         # if manga have 500+ chapters
-        while mangaFeed['total'] > len(mangaFeed['results']) + 500*mangaFeed['offset']:
+        while mangaFeed['total'] > (len(mangaFeed['results']) + 500*mangaFeed['offset']):
             mangaFeed['offset'] += 1 
             r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
