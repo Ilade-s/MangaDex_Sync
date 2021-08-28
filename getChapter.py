@@ -10,7 +10,7 @@ import asyncio # used to gather requests
 async def getPages(imgPaths: list[str], hash: str, base: str, quality: bool):
     """
     Get all pages from imgPaths from the chapter with the hash
-    (Asynchronous function : call it with "asyncio.run(getPages(imgPaths, hash, quality))")
+    (Asynchronous function : call it with "asyncio.run(getPages(imgPaths, hash, base, quality))")
     args:
         - imgPaths : list[str] : list of adresses to each page of the chapter
         - hash : str : hash linked to the chapter

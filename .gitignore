@@ -1,8 +1,2 @@
-/Ijiranaide Nagatoro-san
-/Kaguya-sama wa Kokurasetai Tensai-tachi no Renai Zunousen
-/Komi-san wa Komyushou Desu
-/search.json
-/Kubo-san wa Boku (Mobu) wo Yurusanai
-/Kobayashi-san Chi no Maid Dragon
-/__pycache__
-test.py
+# ignores all mangas folders (and __pycache__)
+/*

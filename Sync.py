@@ -57,18 +57,19 @@ if newSync: # Search for a new manga and ask for storage choices
         title = input("Search title : ")
         payload = {
         "title": title,
-        "limit": 5, # numbers of results to choose from (5 by default)
+        "limit": 9, # numbers of results to choose from (5 by default)
+        "offset": 0,
         "contentRating[]": [
             "safe",
             "suggestive",
             "erotica",
             "pornographic"
-        ]
+        ],
         # tag exemples
-#        "includedTags[]": [
-#            "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
-#            "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
-#        ]
+        #"includedTags[]": [
+        #    "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
+        #    "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+        #]
         # you can edit this dictionary by adding tags (like above, exemples in tags.json)
         }
 
@@ -82,11 +83,11 @@ if newSync: # Search for a new manga and ask for storage choices
         json.dump(data, file)
 
     print("============================================")
-    print("Search results...")
+    print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
     if data["results"]: # results found
         for i in range(len(data["results"])):
             title = data["results"][i]["data"]["attributes"]["title"]["en"]
-            print(f"\t{i} : {title}")
+            print(f"\t{i+1} : {title}")
     else: # no results found
         print("\t[bold red]No results !")
         exit()
@@ -97,10 +98,10 @@ if newSync: # Search for a new manga and ask for storage choices
         dataSearch = json.load(file)
 
     # Search choice
-    mChoice = input(f"Choice (all if empty) (space between values): ")
+    mChoice = input(f"Choice (all if empty // space between values): ")
     if mChoice:
         try:
-            mList = [dataSearch["results"][int(i)] for i in mChoice.split(" ")]
+            mList = [dataSearch["results"][int(i)-1] for i in mChoice.split(" ")]
         except Exception:
             print("[bold red]Invalid choice")
             exit()
@@ -158,7 +159,7 @@ for m in mList:
     # get necessary infos (by search.json or by infos.json)
     if newSync:
         idManga = m["data"]["id"]
-        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?") , m["data"]["attributes"]["title"]["en"])))
+        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["data"]["attributes"]["title"]["en"])))
         if name not in os.listdir(os.getcwd()):
             os.mkdir(f"{os.getcwd()}/{name}")
         try:
@@ -224,7 +225,7 @@ for m in mList:
         hash = c["data"]["attributes"]["hash"]
         fileFormat = "png" if qChoice else "jpg"
         try:
-            title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?"), c["data"]["attributes"]["title"])))
+            title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["data"]["attributes"]["title"])))
         except Exception as e:
             title = "NoTitle"
         # check if it's the same chapter, but from another translator
@@ -271,7 +272,7 @@ for m in mList:
                     pass
         prgbar.update(prgbar.task_ids[-1], description=f"{name} (vol {vol} chap {chap})", advance=1)
         previousChap = chap
-    if newSync:
+    if nNewImgs:
         print(f"{name} have been successfully synced from MangaDex !")
         print(f"\t{nNewImgs} images have been added to the {name}/chapters/ folder")
 
