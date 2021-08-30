@@ -22,7 +22,7 @@ async def getPages(imgPaths: list[str], hash: str, base: str, quality: bool):
     adress = f"{base}/data/{hash}/" if quality else f"{base}/data-saver/{hash}"
     # do the requests for each image (asynchronous)
     async with areq.AsyncClient() as client: 
-        tasks = (client.get(f"{adress}/{img}") for img in imgPaths)  
+        tasks = (client.get(f"{adress}/{img}", timeout=10) for img in imgPaths)  
         reqs = await asyncio.gather(*tasks)
 
     images = [rep.content for rep in reqs]
