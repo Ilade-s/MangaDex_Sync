@@ -225,6 +225,8 @@ for m in mList:
         hash = c["data"]["attributes"]["hash"]
         fileFormat = "png" if qChoice else "jpg"
         try:
+            if not c["data"]["attributes"]["title"]:
+                title = "NoTitle"
             title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["data"]["attributes"]["title"])))
         except Exception as e:
             title = "NoTitle"
