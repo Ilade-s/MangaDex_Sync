@@ -72,17 +72,16 @@ async def get_manga(fsChoice, qChoice, idManga, name, idTask):
     for i in range(0, len(chapters), 10):
         results = await asyncio.gather(*tasks[i:i+10])
         with ThreadPool(15) as pool:
-            new_imgs_chap = pool.starmap(save_chapter, (*results[:-1],))
+            new_imgs_chap = pool.starmap(save_chapter, (*results,))
             pool.close()
         nNewImgs += sum(new_imgs_chap)
     
     if nNewImgs:
-        print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the {name}/chapters/ folder")
+        print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
 
 async def get_chapter_data(c, quality, name, fsChoice, idTask):
     """
     Get all pages from imgPaths from the chapter with the hash
-    (Asynchronous function : call it with "asyncio.run(getPages(imgPaths, hash, base, quality))")
     args:
         - c : json dictionary with chapter infos
         - quality : bool : if the images are compressed (jpg) or not (png)
