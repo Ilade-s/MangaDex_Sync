@@ -313,7 +313,7 @@ prgbar.start()
 start = perf_counter()
 # for each manga
 def get_param_manga(m, fsChoice='', qChoice=''):
-    if fsChoice and qChoice:
+    if newSync:
         idManga = m["data"]["id"]
         name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["data"]["attributes"]["title"]["en"])))
         if name not in os.listdir(os.getcwd()):
@@ -340,7 +340,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
     return fsChoice, qChoice, idManga, name
 
 async def get_all_mangas(mList):
-    manga_tasks = (get_manga(*get_param_manga(mList[i]), i) for i in range(len(mList)))
+    manga_tasks = (get_manga(*(get_param_manga(mList[i], fsChoice, qChoice) if newSync else get_param_manga(mList[i])), i) for i in range(len(mList)))
     await asyncio.gather(*manga_tasks)
 
 asyncio.run(get_all_mangas(mList))
