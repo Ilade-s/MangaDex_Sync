@@ -10,4 +10,4 @@ Simple script using the MangaDex public API to search and get/sync mangas and st
     - the mangas folders will be stored in the working directory so be careful of where you launch the script from
     - the script only ask for one result but this can be changed by changing the value in the limit key of the search payload (l.42)
     
-Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
+Link to the MangaDex API documentation : https://api.mangadex.org/docs.html (and credits to them for their API)
