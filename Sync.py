@@ -12,15 +12,171 @@ Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
     Made by Merlet Raphael, 2021
 """
 
-import requests as req # HTTP requests
+import httpx # async requests
+import requests as req
 from rich import print # pretty print
 from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
-from getChapter import getPages # async func to get pages
 import asyncio # used to run async func
+from time import perf_counter, time
+from multiprocessing.dummy import Pool as ThreadPool
 
 base = "https://api.mangadex.org"
+
+async def get_manga(fsChoice, qChoice, idManga, name, idTask):
+    """
+    called for each chapter concurrently, take care of doing the requests and saving the pages
+    """
+
+    payloadManga = {
+        "translatedLanguage[]": [
+#            "fr", 
+            "en"
+        ],
+        "limit": 500,
+        "offset": 0
+    }  
+    
+    with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
+        r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+        mangaFeed = r3.json()
+        chapters = mangaFeed['results']
+        # if manga have 500+ chapters
+        while mangaFeed['total'] > (len(mangaFeed['results']) + 500*mangaFeed['offset']):
+            mangaFeed['offset'] += 1 
+            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+            mangaFeed = r3.json()
+            chapters += mangaFeed['results']
+
+        json.dump(chapters, file)
+
+    with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
+        chapters = json.load(file)
+        # sort the list from the json to make loading of images in order
+        chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
+                                    if c["data"]["attributes"]["chapter"] != None 
+                                    else 0))                            
+        n = 'aaaaa'                           
+        for c in chapters:
+            ni = c["data"]["attributes"]["chapter"]
+            if ni == n:
+                chapters.remove(c)
+            else:
+                n = ni
+    # for each chapter
+    nNewImgs = 0
+    # add manga task
+    prgbar.add_task(name, total=len(chapters))
+    tasks = [get_chapter_data(c, qChoice, name, fsChoice, idTask) for c in chapters]
+    for i in range(0, len(chapters), 10):
+        results = await asyncio.gather(*tasks[i:i+10])
+        with ThreadPool(15) as pool:
+            new_imgs_chap = pool.starmap(save_chapter, (*results[:-1],))
+            pool.close()
+        nNewImgs += sum(new_imgs_chap)
+    
+    if nNewImgs:
+        print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the {name}/chapters/ folder")
+
+async def get_chapter_data(c, quality, name, fsChoice, idTask):
+    """
+    Get all pages from imgPaths from the chapter with the hash
+    (Asynchronous function : call it with "asyncio.run(getPages(imgPaths, hash, base, quality))")
+    args:
+        - c : json dictionary with chapter infos
+        - quality : bool : if the images are compressed (jpg) or not (png)
+        - name : str : name of manga
+
+    output : int : number of added images
+    """
+    # chapter infos
+    vol = c["data"]["attributes"]["volume"]
+    chap = c["data"]["attributes"]["chapter"]
+    id = c["data"]["id"]
+    imgPaths = c["data"]["attributes"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
+    hash = c["data"]["attributes"]["hash"]
+    fileFormat = "png" if quality else "jpg"
+    # get the title
+    try:
+        if not c["data"]["attributes"]["title"]:
+            title = "NoTitle"
+        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["data"]["attributes"]["title"])))
+    except Exception:
+        title = "NoTitle"
+    # check for already downloaded images in directory
+    if fsChoice:    
+        imgsToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
+    else:
+        imgsToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
+    if imgsToGet:
+        # do the requests for each image (asynchronous)
+        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        dataServer = rServ.json()
+        try:
+            baseServer = dataServer["baseUrl"]
+        except KeyError: # request failed
+            time_to_wait = float(rServ.headers['x-ratelimit-retry-after']) - time()
+            await asyncio.sleep(time_to_wait)
+            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+            dataServer = rServ.json()
+            baseServer = dataServer["baseUrl"]
+        dataServer = rServ.json()
+        adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
+        async with httpx.AsyncClient() as client: 
+            error_encountered = 1
+            while error_encountered:
+                try:
+                    tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgPaths)  
+                    reqs = await asyncio.gather(*tasks)
+                    images = [rep.content for rep in reqs]
+                    error_encountered = 0
+                except Exception:
+                    continue
+    else:
+        images = []
+
+    prgbar.update(prgbar.task_ids[idTask], description=f'{name} (vol {vol} chap {chap})', advance=1)
+    return images, name, vol, chap, title, fileFormat, fsChoice
+
+def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoice) -> int:
+    """
+    called by get_chapter_pages saves the images of the chapter in the correct folder
+    param : images : list[bytes] : list of all the pages in bytes
+    param : name, vol, chap, title : infos of the chapter
+
+    sortie : int : number of new images saved for this chapter
+    """
+    new_imgs = 0
+    for img in images:
+        try:
+            if fsChoice:
+                # NORMAL FILE SYSTEM ({vol}/{chap}-{page}.*)
+                # (easier for browsing pictures but harder to view in explorer)
+                try:
+                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}")) # create folder
+                except Exception:
+                    pass
+                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                    # write data to file
+                    file.buffer.write(img)
+            else:
+                # ==============================================================
+                # OTHER FILE SYSTEM ({vol}/{chap}/{page}.*)
+                # (easier for browsing in explorer but reading is harder)
+                try:
+                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
+                except Exception:
+                    pass
+                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                    # write data to file
+                    file.buffer.write(img)
+            new_imgs += 1
+        except FileExistsError:
+            pass
+
+    return new_imgs
+
 
 print("============================================")
 print("Mangadex Downloader/Sync script")
@@ -154,10 +310,10 @@ else: # Ask which manga(s) must be updated
 # create progress bar for mangas
 prgbar = Progress()
 prgbar.start()
+start = perf_counter()
 # for each manga
-for m in mList:
-    # get necessary infos (by search.json or by infos.json)
-    if newSync:
+def get_param_manga(m, fsChoice='', qChoice=''):
+    if fsChoice and qChoice:
         idManga = m["data"]["id"]
         name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["data"]["attributes"]["title"]["en"])))
         if name not in os.listdir(os.getcwd()):
@@ -180,104 +336,18 @@ for m in mList:
         idManga = mangaInfos["id"]
         qChoice = mangaInfos["format"]
         fsChoice = mangaInfos["fileSys"]
-
-    payloadManga = {
-        "translatedLanguage[]": [
-#            "fr", 
-            "en"
-        ],
-        "limit": 500,
-        "offset": 0
-    }  
     
-    with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
-        r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
-        mangaFeed = r3.json()
-        chapters = mangaFeed['results']
-        # if manga have 500+ chapters
-        while mangaFeed['total'] > (len(mangaFeed['results']) + 500*mangaFeed['offset']):
-            mangaFeed['offset'] += 1 
-            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
-            mangaFeed = r3.json()
-            chapters += mangaFeed['results']
+    return fsChoice, qChoice, idManga, name
 
-        json.dump(chapters, file)
+async def get_all_mangas(mList):
+    manga_tasks = (get_manga(*get_param_manga(mList[i]), i) for i in range(len(mList)))
+    await asyncio.gather(*manga_tasks)
 
-    with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
-        chapters = json.load(file)
-        # sort the list from the json to make loading of images in order
-        chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
-                                    if c["data"]["attributes"]["chapter"] != None 
-                                    else 0))              
-    # for each chapter
-    i = 0
-    nNewImgs = 0
-    previousChap = ""
-    # add manga task
-    prgbar.add_task(f"{name} (vol 1 chap 1)", total=len(chapters))
-    for c in chapters:
-        i += 1
-        # chapter infos
-        vol = c["data"]["attributes"]["volume"]
-        chap = c["data"]["attributes"]["chapter"]
-        id = c["data"]["id"]
-        imgPaths = c["data"]["attributes"][("data" if qChoice else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
-        hash = c["data"]["attributes"]["hash"]
-        fileFormat = "png" if qChoice else "jpg"
-        try:
-            if not c["data"]["attributes"]["title"]:
-                title = "NoTitle"
-            title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["data"]["attributes"]["title"])))
-        except Exception as e:
-            title = "NoTitle"
-        # check if it's the same chapter, but from another translator
-        if not chap == previousChap: 
-            # check for already downloaded images in directory
-            if fsChoice:    
-                imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
-            else:
-                imgToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
-            if imgToGet: # if there are images to get
-                # request to get the M@H server
-                rServ = req.get(f"{base}/at-home/server/{id}")
-                dataServer = rServ.json()
-                baseServer = dataServer["baseUrl"]
-                # do all the requests to get the images (bytes)
-                images = asyncio.run(getPages(imgToGet, hash, baseServer, qChoice)) 
-            else: images = []
-            # save all images
-            for img in images:
-                try:
-                    if fsChoice:
-                        # NORMAL FILE SYSTEM ({vol}/{chap}-{page}.*)
-                        # (easier for browsing pictures but harder to view in explorer)
-                        try:
-                            os.makedirs(os.path.join(name, "chapters", f"vol-{vol}")) # create folder
-                        except Exception:
-                            pass
-                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
-                            # write data to file
-                            file.buffer.write(img)
-                    else:
-                        # ==============================================================
-                        # OTHER FILE SYSTEM ({vol}/{chap}/{page}.*)
-                        # (easier for browsing in explorer but reading is harder)
-                        try:
-                            os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
-                        except Exception:
-                            pass
-                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
-                            # write data to file
-                            file.buffer.write(img)
-                    nNewImgs += 1
-                except FileExistsError:
-                    pass
-        prgbar.update(prgbar.task_ids[-1], description=f"{name} (vol {vol} chap {chap})", advance=1)
-        previousChap = chap
-    if nNewImgs:
-        print(f"{name} have been successfully synced from MangaDex !")
-        print(f"\t{nNewImgs} images have been added to the {name}/chapters/ folder")
+asyncio.run(get_all_mangas(mList))
 
+stop = perf_counter()
+execution_time = round(stop - start, 3)
+print(f"temps d'exécution : {execution_time}s")
 prgbar.refresh()
 prgbar.stop()
 
