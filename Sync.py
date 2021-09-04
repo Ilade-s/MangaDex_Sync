@@ -4,7 +4,7 @@ Simple script using the MangaDex public API to search and get/sync mangas and st
         - don't have to be logged in to use it
         - you can update existant archives easily (U as 1st input)
         - title is asked in console but tags must be added directly into the search payload (l.42)
-        - you can choose between two file system to save pictures, but if you want to change afterward, you can use the FileSys_convert.py script
+        - you can choose between two file system to save pictures, but if you want to change afterwards, you can use the FileSys_convert.py script
         - .json files are used to store responses from the server and are kept after sync, so it is possible to read them
         - you can stop the script halfway in and restart it after, it will pass already dowloaded pictures (so the script can update mangas already synced before with only the new content)
 Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
@@ -19,10 +19,11 @@ from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
 import asyncio # used to run async func
-from time import perf_counter, time
-from multiprocessing.dummy import Pool as ThreadPool
+from time import perf_counter, time # time is time since Epoch
+from multiprocessing.dummy import Pool as ThreadPool # for fast I/O (hopefully)
 
 base = "https://api.mangadex.org"
+SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
 
 async def get_manga(fsChoice, qChoice, idManga, name, idTask):
     """
@@ -31,7 +32,7 @@ async def get_manga(fsChoice, qChoice, idManga, name, idTask):
 
     payloadManga = {
         "translatedLanguage[]": [
-#            "fr", 
+            #"fr", 
             "en"
         ],
         "limit": 500,
@@ -64,13 +65,13 @@ async def get_manga(fsChoice, qChoice, idManga, name, idTask):
                 chapters.remove(c)
             else:
                 n = ni
-    # for each chapter
+
     nNewImgs = 0
-    # add manga task
     prgbar.add_task(name, total=len(chapters))
+    # setup chapter tasks
     tasks = [get_chapter_data(c, qChoice, name, fsChoice, idTask) for c in chapters]
-    for i in range(0, len(chapters), 10):
-        results = await asyncio.gather(*tasks[i:i+10])
+    for i in range(0, len(chapters), SIMULTANEOUS_REQUESTS):
+        results = await asyncio.gather(*tasks[i:i+SIMULTANEOUS_REQUESTS])
         with ThreadPool(15) as pool:
             new_imgs_chap = pool.starmap(save_chapter, (*results,))
             pool.close()
@@ -346,7 +347,7 @@ asyncio.run(get_all_mangas(mList))
 
 stop = perf_counter()
 execution_time = round(stop - start, 3)
-print(f"temps d'exécution : {execution_time}s")
+print(f"temps d'éxecution : {execution_time}s")
 prgbar.refresh()
 prgbar.stop()
 
