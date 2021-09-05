@@ -25,7 +25,7 @@ from multiprocessing.dummy import Pool as ThreadPool # for fast I/O (hopefully)
 base = "https://api.mangadex.org"
 SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
 
-async def get_manga(fsChoice, qChoice, idManga, name, idTask):
+async def get_manga(fsChoice, qChoice, idManga, name):
     """
     called for each chapter concurrently, take care of doing the requests and saving the pages
     """
@@ -67,9 +67,9 @@ async def get_manga(fsChoice, qChoice, idManga, name, idTask):
                 n = ni
 
     nNewImgs = 0
-    prgbar.add_task(name, total=len(chapters))
+    taskId = prgbar.add_task(name, total=len(chapters))
     # setup chapter tasks
-    tasks = [get_chapter_data(c, qChoice, name, fsChoice, idTask) for c in chapters]
+    tasks = [get_chapter_data(c, qChoice, name, fsChoice, taskId) for c in chapters]
     for i in range(0, len(chapters), SIMULTANEOUS_REQUESTS):
         results = await asyncio.gather(*tasks[i:i+SIMULTANEOUS_REQUESTS])
         with ThreadPool(15) as pool:
@@ -79,6 +79,8 @@ async def get_manga(fsChoice, qChoice, idManga, name, idTask):
     
     if nNewImgs:
         print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
+
+    prgbar.remove_task(taskId)
 
 async def get_chapter_data(c, quality, name, fsChoice, idTask):
     """
@@ -110,18 +112,21 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
     else:
         imgsToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
     if imgsToGet:
-        # do the requests for each image (asynchronous)
-        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        dataServer = rServ.json()
-        try:
-            baseServer = dataServer["baseUrl"]
-        except KeyError: # request failed
-            time_to_wait = float(rServ.headers['x-ratelimit-retry-after']) - time()
-            await asyncio.sleep(time_to_wait)
-            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-            dataServer = rServ.json()
-            baseServer = dataServer["baseUrl"]
-        dataServer = rServ.json()
+        baseServer = 'https://uploads.mangadex.org'
+        # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
+        # If used, make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
+        #rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        #dataServer = rServ.json()
+        #try:
+        #    baseServer = dataServer["baseUrl"]
+        #except KeyError: # request failed
+        #    time_to_wait = float(rServ.headers['x-ratelimit-retry-after']) - time()
+        #    await asyncio.sleep(time_to_wait)
+        #    rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        #    dataServer = rServ.json()
+        #    baseServer = dataServer["baseUrl"]
+        #dataServer = rServ.json()
+
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
         async with httpx.AsyncClient() as client: 
             error_encountered = 1
@@ -136,7 +141,7 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
     else:
         images = []
 
-    prgbar.update(prgbar.task_ids[idTask], description=f'{name} (vol {vol} chap {chap})', advance=1)
+    prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     return images, name, vol, chap, title, fileFormat, fsChoice
 
 def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoice) -> int:
@@ -340,7 +345,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
     return fsChoice, qChoice, idManga, name
 
 async def get_all_mangas(mList):
-    manga_tasks = (get_manga(*(get_param_manga(mList[i], fsChoice, qChoice) if newSync else get_param_manga(mList[i])), i) for i in range(len(mList)))
+    manga_tasks = (get_manga(*(get_param_manga(m, fsChoice, qChoice) if newSync else get_param_manga(m))) for m in mList)
     await asyncio.gather(*manga_tasks)
 
 asyncio.run(get_all_mangas(mList))
