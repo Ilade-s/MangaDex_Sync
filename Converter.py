@@ -66,14 +66,21 @@ for m in titlelist:
         chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
                                     if c["data"]["attributes"]["chapter"] != None 
                                     else 0))
+        # removing duplicates                            
+        n = 'aaaaa'                           
+        for c in chapters:
+            ni = c["data"]["attributes"]["chapter"]
+            if ni == n:
+                chapters.remove(c)
+            else:
+                n = ni
 
     print("[italic]Replacing images...[/italic]")
-    previousChap = ""
     # for each chapter
-    i = 0
     # create progress bar for chapters 
     prgbar = Progress()
     prgbar.start()
+    idTask = prgbar.add_task(name, total=len(chapters))
     for c in chapters:
         # chapter infos
         vol = c["data"]["attributes"]["volume"]
@@ -82,49 +89,42 @@ for m in titlelist:
         imgPaths = c["data"]["attributes"]["dataSaver"]
         hash = c["data"]["attributes"]["hash"]
         try:
-            title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?"), c["data"]["attributes"]["title"])))
+            title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", '/'), c["data"]["attributes"]["title"])))
         except Exception as e:
             title = "NoTitle"
-        if not chap == previousChap:
-            i += 1
-            prgbar.add_task(f"Chapter {chap} volume {vol}", total=len(imgPaths))
-            if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
-                for img in imgPaths: # for each image
-                    try:
-                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
-                            try:
-                                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
-                                    file.buffer.write(ofile.buffer.read()) 
-                            except FileExistsError:
-                                pass
-                    except FileNotFoundError:
-                        pass
-                    prgbar.advance(prgbar.task_ids[-1])
+        if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
+            for img in imgPaths: # for each image
                 try:
-                    for img in os.listdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")):
-                        os.remove(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", img))
-                    os.rmdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
+                    with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
+                        try:
+                            with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
+                                file.buffer.write(ofile.buffer.read()) 
+                        except FileExistsError:
+                            pass
                 except FileNotFoundError:
                     pass
-            # ==============================================================
-            else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
-                for img in imgPaths: # for each image
-                    # create folder
-                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 
-                    try:
-                        with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile: # or jpg for smaller size
-                            try:
-                                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file: # or jpg for smaller size
-                                    file.buffer.write(ofile.buffer.read()) 
-                            except FileExistsError:
-                                pass
-                        os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}")
-                    except FileNotFoundError:
-                        pass
-                    prgbar.advance(prgbar.task_ids[-1])
-
-            prgbar.remove_task(prgbar.task_ids[-1])
-            previousChap = chap     
+            try:
+                for img in os.listdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")):
+                    os.remove(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", img))
+                os.rmdir(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
+            except FileNotFoundError:
+                pass
+        # ==============================================================
+        else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
+            for img in imgPaths: # for each image
+                # create folder
+                os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 
+                try:
+                    with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile: # or jpg for smaller size
+                        try:
+                            with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file: # or jpg for smaller size
+                                file.buffer.write(ofile.buffer.read()) 
+                        except FileExistsError:
+                            pass
+                    os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}")
+                except FileNotFoundError:
+                    pass
+        prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     prgbar.refresh()
     prgbar.stop()
     print("[bold green]Conversion completed ![/bold green]")   
