@@ -77,11 +77,10 @@ for m in titlelist:
 
     print("[italic]Replacing images...[/italic]")
     # for each chapter
-    i = 0
     # create progress bar for chapters 
     prgbar = Progress()
     prgbar.start()
-    prgbar.add_task(name, total=len(chapters))
+    idTask = prgbar.add_task(name, total=len(chapters))
     for c in chapters:
         # chapter infos
         vol = c["data"]["attributes"]["volume"]
@@ -93,7 +92,6 @@ for m in titlelist:
             title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", '/'), c["data"]["attributes"]["title"])))
         except Exception as e:
             title = "NoTitle"
-        i += 1
         if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
             for img in imgPaths: # for each image
                 try:
@@ -126,7 +124,7 @@ for m in titlelist:
                     os.remove(f"{name}/chapters/vol-{vol}/chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}")
                 except FileNotFoundError:
                     pass
-        prgbar.update(prgbar.task_ids[-1], description=f'{name} (vol {vol} chap {chap})', advance=1)
+        prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     prgbar.refresh()
     prgbar.stop()
     print("[bold green]Conversion completed ![/bold green]")   

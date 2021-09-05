@@ -24,6 +24,7 @@ from multiprocessing.dummy import Pool as ThreadPool # for fast I/O (hopefully)
 
 base = "https://api.mangadex.org"
 SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
+__VERSION__ = '1.1'
 
 async def get_manga(fsChoice, qChoice, idManga, name):
     """
@@ -184,7 +185,7 @@ def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoi
 
 
 print("============================================")
-print("Mangadex Downloader/Sync script")
+print(f"Mangadex Downloader/Sync script v{__VERSION__}")
 print("By Merlet Raphaël")
 print("============================================")
 newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U) ? ") == "S" else 0)
