@@ -1,5 +1,5 @@
 # MangaDex_Sync
-Simple script using the MangaDex public API to search and get/sync mangas and store it in folders :
+Simple script using the MangaDex public API to search and get/sync mangas and store it in folders (now fully async !) :
     
     - don't have to be logged in to use it
     - title is asked in console but tags must be added directly into the search payload (l.42)
