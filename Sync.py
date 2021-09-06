@@ -204,11 +204,11 @@ if newSync: # Search for a new manga and ask for storage choices
         print("[bold red]Invalid choice")
         exit()
     
-    if isLink: # link to page (need to get the page)
-        link = input("Adress to manga : ")
-        id = link.split('/')[-2] if len(link) > 36 else link
+    if isLink: # links to page (need to get the page)
+        links = input("Adress(es) to manga(s) (espaces between each adresses/ids) : ")
+        ids = [link.split('/')[-2] if len(link) > 36 else link for link in links.split(' ')]
         payload = {
-            "ids[]": [id],
+            "ids[]": ids,
             "contentRating[]": [
                 "safe",
                 "suggestive",
