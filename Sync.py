@@ -205,7 +205,8 @@ if newSync: # Search for a new manga and ask for storage choices
         exit()
     
     if isLink: # link to page (need to get the page)
-        id = input("Adress to manga : ")[-36:]
+        link = input("Adress to manga : ")
+        id = link.split('/')[-2] if len(link) > 36 else link
         payload = {
             "ids[]": [id],
             "contentRating[]": [
@@ -219,7 +220,7 @@ if newSync: # Search for a new manga and ask for storage choices
         title = input("Search title : ")
         payload = {
         "title": title,
-        "limit": 9, # numbers of results to choose from (5 by default)
+        "limit": 15, # numbers of results to choose from (5 by default)
         "offset": 0,
         "contentRating[]": [
             "safe",
