@@ -220,7 +220,7 @@ if newSync: # Search for a new manga and ask for storage choices
         title = input("Search title : ")
         payload = {
         "title": title,
-        "limit": 15, # numbers of results to choose from (5 by default)
+        "limit": 9, # numbers of results to choose from (9 by default : 10 results)
         "offset": 0,
         "contentRating[]": [
             "safe",
