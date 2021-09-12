@@ -43,25 +43,25 @@ async def get_manga(fsChoice, qChoice, idManga, name):
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
         r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         mangaFeed = r3.json()
-        chapters = mangaFeed['results']
+        chapters = mangaFeed['data']
         # if manga have 500+ chapters
         while mangaFeed['total'] > (len(mangaFeed['results']) + 500*mangaFeed['offset']):
             mangaFeed['offset'] += 1 
             r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
-            chapters += mangaFeed['results']
+            chapters += mangaFeed['data']
 
         json.dump(chapters, file)
 
     with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
-        chapters.sort(key=lambda c: (float(c["data"]["attributes"]["chapter"]) 
-                                    if c["data"]["attributes"]["chapter"] != None 
+        chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
+                                    if c["attributes"]["chapter"] != None 
                                     else 0))                            
         n = 'aaaaa'                           
         for c in chapters:
-            ni = c["data"]["attributes"]["chapter"]
+            ni = c["attributes"]["chapter"]
             if ni == n:
                 chapters.remove(c)
             else:
@@ -94,17 +94,17 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
     output : int : number of added images
     """
     # chapter infos
-    vol = c["data"]["attributes"]["volume"]
-    chap = c["data"]["attributes"]["chapter"]
-    id = c["data"]["id"]
-    imgPaths = c["data"]["attributes"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
-    hash = c["data"]["attributes"]["hash"]
+    vol = c["attributes"]["volume"]
+    chap = c["attributes"]["chapter"]
+    id = c["id"]
+    imgPaths = c["attributes"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
+    hash = c["attributes"]["hash"]
     fileFormat = "png" if quality else "jpg"
     # get the title
     try:
-        if not c["data"]["attributes"]["title"]:
+        if not c["attributes"]["title"]:
             title = "NoTitle"
-        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["data"]["attributes"]["title"])))
+        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["attributes"]["title"])))
     except Exception:
         title = "NoTitle"
     # check for already downloaded images in directory
@@ -249,7 +249,7 @@ if newSync: # Search for a new manga and ask for storage choices
     print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
     if data["results"]: # results found
         for i in range(len(data["results"])):
-            title = data["results"][i]["data"]["attributes"]["title"]["en"]
+            title = data["data"][i]["attributes"]["title"]["en"]
             print(f"\t{i+1} : {title}")
     else: # no results found
         print("\t[bold red]No results !")
@@ -264,12 +264,12 @@ if newSync: # Search for a new manga and ask for storage choices
     mChoice = input(f"Choice (all if empty // space between values): ")
     if mChoice:
         try:
-            mList = [dataSearch["results"][int(i)-1] for i in mChoice.split(" ")]
+            mList = [dataSearch["data"][int(i)-1] for i in mChoice.split(" ")]
         except Exception:
             print("[bold red]Invalid choice")
             exit()
     else:
-        mList = dataSearch["results"]
+        mList = dataSearch["data"]
     
     print("============================================")
     print("[bold green]File system :")
@@ -321,8 +321,8 @@ start = perf_counter()
 # for each manga
 def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
-        idManga = m["data"]["id"]
-        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["data"]["attributes"]["title"]["en"])))
+        idManga = m["id"]
+        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["attributes"]["title"]["en"])))
         if name not in os.listdir(os.getcwd()):
             os.mkdir(f"{os.getcwd()}/{name}")
         try:
