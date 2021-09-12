@@ -37,7 +37,8 @@ async def get_manga(fsChoice, qChoice, idManga, name):
             "en"
         ],
         "limit": 500,
-        "offset": 0
+        "offset": 0,
+        "includeFutureUpdates": "0"
     }  
     
     with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
