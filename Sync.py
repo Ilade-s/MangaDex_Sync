@@ -45,7 +45,7 @@ async def get_manga(fsChoice, qChoice, idManga, name):
         mangaFeed = r3.json()
         chapters = mangaFeed['data']
         # if manga have 500+ chapters
-        while mangaFeed['total'] > (len(mangaFeed['results']) + 500*mangaFeed['offset']):
+        while mangaFeed['total'] > (len(mangaFeed['data']) + 500*mangaFeed['offset']):
             mangaFeed['offset'] += 1 
             r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
@@ -131,14 +131,22 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
         async with httpx.AsyncClient() as client: 
             error_encountered = 1
+            retries_left = 5
             while error_encountered:
                 try:
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgPaths)  
                     reqs = await asyncio.gather(*tasks)
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
-                except Exception:
-                    continue
+                except Exception as e:
+                    print(f'An exception occurred when gathering chap {chap} images : {e} (will retry {retries_left} more times)')
+                    retries_left -= 1
+                    if retries_left:
+                        continue
+                    else:
+                        print(f"Chap {chap} ignored because 5 exceptions occured")
+                        images = []
+                        break
     else:
         images = []
 
