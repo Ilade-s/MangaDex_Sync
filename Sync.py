@@ -256,8 +256,8 @@ if newSync: # Search for a new manga and ask for storage choices
 
     print("============================================")
     print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
-    if data["results"]: # results found
-        for i in range(len(data["results"])):
+    if data["data"]: # results found
+        for i in range(len(data["data"])):
             title = data["data"][i]["attributes"]["title"]["en"]
             print(f"\t{i+1} : {title}")
     else: # no results found
