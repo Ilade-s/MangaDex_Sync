@@ -105,7 +105,7 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
     try:
         if not c["attributes"]["title"]:
             title = "NoTitle"
-        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/"), c["attributes"]["title"])))
+        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/", '<', '>'), c["attributes"]["title"])))
     except Exception:
         title = "NoTitle"
     # check for already downloaded images in directory
@@ -331,7 +331,7 @@ start = perf_counter()
 def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
         idManga = m["id"]
-        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/') , m["attributes"]["title"]["en"])))
+        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/', '<', '>') , m["attributes"]["title"]["en"])))
         if name not in os.listdir(os.getcwd()):
             os.mkdir(f"{os.getcwd()}/{name}")
         try:
