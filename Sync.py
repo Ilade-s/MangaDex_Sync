@@ -202,7 +202,7 @@ newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U)
 # User interaction
 if newSync: # Search for a new manga and ask for storage choices
     print("============================================")
-    print("Search term :")
+    print("Search type :")
     print("\t- 0 : Search engine")
     print("\t- 1 : Link to manga page")
     print("============================================")
@@ -241,6 +241,7 @@ if newSync: # Search for a new manga and ask for storage choices
         #"includedTags[]": [
         #    "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
         #    "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+        #    "caaa44eb-cd40-4177-b930-79d3ef2afe87" # School
         #]
         # you can edit this dictionary by adding tags (like above, exemples in tags.json)
         }
@@ -258,7 +259,7 @@ if newSync: # Search for a new manga and ask for storage choices
     print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
     if data["data"]: # results found
         for i in range(len(data["data"])):
-            title = data["data"][i]["attributes"]["title"]["en"]
+            title = data["data"][i]["attributes"]["title"]["en"] if "en" in data["data"][i]["attributes"]["title"].keys() else list(data["data"][i]["attributes"]["title"].values())[0]
             print(f"\t{i+1} : {title}")
     else: # no results found
         print("\t[bold red]No results !")
