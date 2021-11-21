@@ -110,9 +110,9 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
         title = "NoTitle"
     # check for already downloaded images in directory
     if fsChoice:    
-        imgsToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
+        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
     else:
-        imgsToGet = [img for img in imgPaths if not os.path.isfile(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
+        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
     if imgsToGet:
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
