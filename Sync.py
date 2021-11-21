@@ -26,6 +26,10 @@ base = "https://api.mangadex.org"
 SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
 __VERSION__ = '1.1'
 
+def format_title(title: str) -> str:
+    """format titles to be usable as filenames and foldernames"""
+    return "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/", '<', '>'), title)))
+
 async def get_manga(fsChoice, qChoice, idManga, name):
     """
     called for each chapter concurrently, take care of doing the requests and saving the pages
@@ -105,7 +109,7 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
     try:
         if not c["attributes"]["title"]:
             title = "NoTitle"
-        title = "".join(list(filter(lambda x: x not in (".", ":", '"', "?", "/", '<', '>'), c["attributes"]["title"])))
+        title = format_title(c["attributes"]["title"])
     except Exception:
         title = "NoTitle"
     # check for already downloaded images in directory
@@ -332,7 +336,7 @@ start = perf_counter()
 def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
         idManga = m["id"]
-        name = "".join(list(filter(lambda x: x not in (".", ":", ",", "?", '/', '<', '>') , m["attributes"]["title"]["en"])))
+        name = format_title(m["attributes"]["title"]["en"] if "en" in m["attributes"]["title"].keys() else m["attributes"]["title"].values()[0])
         if name not in os.listdir(os.getcwd()):
             os.mkdir(f"{os.getcwd()}/{name}")
         try:
