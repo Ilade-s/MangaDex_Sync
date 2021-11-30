@@ -141,6 +141,7 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
                 try:
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgPaths)  
                     reqs = await asyncio.gather(*tasks)
+                    reqs = [await client.get(f"{adress}/{img}", timeout=1000) if rep.status_code == 429 else rep for rep, img in zip(reqs, imgPaths)]
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
                 except Exception as e:
