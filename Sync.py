@@ -121,17 +121,17 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
         # If used, make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        #rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        #dataServer = rServ.json()
-        #try:
-        #    baseServer = dataServer["baseUrl"]
-        #except KeyError: # request failed
-        #    time_to_wait = float(rServ.headers['x-ratelimit-retry-after']) - time()
-        #    await asyncio.sleep(time_to_wait)
-        #    rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        #    dataServer = rServ.json()
-        #    baseServer = dataServer["baseUrl"]
-        #dataServer = rServ.json()
+        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        dataServer = rServ.json()
+        try:
+            baseServer = dataServer["baseUrl"]
+        except KeyError: # request failed
+            time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
+            await asyncio.sleep(time_to_wait)
+            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+            dataServer = rServ.json()
+            baseServer = dataServer["baseUrl"]
+        dataServer = rServ.json()
 
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
         async with httpx.AsyncClient() as client: 
@@ -141,7 +141,11 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
                 try:
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgPaths)  
                     reqs = await asyncio.gather(*tasks)
-                    reqs = [await client.get(f"{adress}/{img}", timeout=1000) if rep.status_code == 429 else rep for rep, img in zip(reqs, imgPaths)]
+                    for rep, img in zip(reqs, imgPaths):
+                        if rep.status_code == 429: # Too Many Requests (need to wait for limit)
+                            time_to_wait = float(rep.headers['X-RateLimit-Retry-After']) - time()
+                            if time_to_wait > 0: await asyncio.sleep(time_to_wait)
+                            rep = await client.get(f"{adress}/{img}", timeout=1000)
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
                 except Exception as e:
