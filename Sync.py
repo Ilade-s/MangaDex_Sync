@@ -19,12 +19,14 @@ from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
 import asyncio # used to run async func
-from time import perf_counter, time # time is time since Epoch
+from time import perf_counter, process_time, time # time is time since Epoch
 from multiprocessing.dummy import Pool as ThreadPool # for fast I/O (hopefully)
 
-base = "https://api.mangadex.org"
+base = "https://api.mangadex.org" # base adress for the API endpoints
+FOLDER_NAME = 'archive' # name of the folder to store the mangas folders with the images
 SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
 __VERSION__ = '1.1'
+__AUTHOR__ = 'Merlet Raphaël'
 
 def format_title(title: str) -> str:
     """format titles to be usable as filenames and foldernames"""
@@ -45,7 +47,7 @@ async def get_manga(fsChoice, qChoice, idManga, name):
         "includeFutureUpdates": "0"
     }  
     
-    with open(f"{name}/chapters.json", "w+", encoding="UTF-8") as file:
+    with open(f"{FOLDER_NAME}/{name}/chapters.json", "w+", encoding="UTF-8") as file:
         r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         mangaFeed = r3.json()
         chapters = mangaFeed['data']
@@ -58,7 +60,7 @@ async def get_manga(fsChoice, qChoice, idManga, name):
 
         json.dump(chapters, file)
 
-    with open(f"{name}/chapters.json", "r", encoding="UTF-8") as file:
+    with open(f"{FOLDER_NAME}/{name}/chapters.json", "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
         chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
@@ -114,24 +116,24 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
         title = "NoTitle"
     # check for already downloaded images in directory
     if fsChoice:    
-        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
+        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
     else:
-        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
+        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
     if imgsToGet:
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
         # If used, make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        dataServer = rServ.json()
-        try:
-            baseServer = dataServer["baseUrl"]
-        except KeyError: # request failed
-            time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
-            await asyncio.sleep(time_to_wait)
-            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-            dataServer = rServ.json()
-            baseServer = dataServer["baseUrl"]
-        dataServer = rServ.json()
+        #rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        #dataServer = rServ.json()
+        #try:
+        #    baseServer = dataServer["baseUrl"]
+        #except KeyError: # request failed
+        #    time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
+        #    await asyncio.sleep(time_to_wait)
+        #    rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        #    dataServer = rServ.json()
+        #    baseServer = dataServer["baseUrl"]
+        #dataServer = rServ.json()
 
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
         async with httpx.AsyncClient() as client: 
@@ -143,8 +145,8 @@ async def get_chapter_data(c, quality, name, fsChoice, idTask):
                     reqs = await asyncio.gather(*tasks)
                     for rep, img in zip(reqs, imgPaths):
                         if rep.status_code == 429: # Too Many Requests (need to wait for limit)
-                            time_to_wait = float(rep.headers['X-RateLimit-Retry-After']) - time()
-                            if time_to_wait > 0: await asyncio.sleep(time_to_wait)
+                            print('too much image requests for chapter {} vol {} ... (1s pause)'.format(chap, vol))
+                            await asyncio.sleep(1.0)
                             rep = await client.get(f"{adress}/{img}", timeout=1000)
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
@@ -178,10 +180,10 @@ def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoi
                 # NORMAL FILE SYSTEM ({vol}/{chap}-{page}.*)
                 # (easier for browsing pictures but harder to view in explorer)
                 try:
-                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}")) # create folder
+                    os.makedirs(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}")) # create folder
                 except Exception:
                     pass
-                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                with open(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
                     # write data to file
                     file.buffer.write(img)
             else:
@@ -189,10 +191,10 @@ def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoi
                 # OTHER FILE SYSTEM ({vol}/{chap}/{page}.*)
                 # (easier for browsing in explorer but reading is harder)
                 try:
-                    os.makedirs(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
+                    os.makedirs(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
                 except Exception:
                     pass
-                with open(os.path.join(name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                with open(os.path.join(FOLDER_NAME, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
                     # write data to file
                     file.buffer.write(img)
             new_imgs += 1
@@ -201,10 +203,9 @@ def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoi
 
     return new_imgs
 
-
 print("============================================")
 print(f"Mangadex Downloader/Sync script v{__VERSION__}")
-print("By Merlet Raphaël")
+print(f"By {__AUTHOR__}")
 print("============================================")
 newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U) ? ") == "S" else 0)
 
@@ -315,7 +316,7 @@ if newSync: # Search for a new manga and ask for storage choices
         exit()
 
 else: # Ask which manga(s) must be updated
-    folderList = [f for f in os.listdir(os.getcwd()) if os.path.isdir(f) and "infos.json" in os.listdir(f)]
+    folderList = [f for f in os.listdir(os.path.join(FOLDER_NAME)) if os.path.isdir(os.path.join(FOLDER_NAME, f)) and "infos.json" in os.listdir(os.path.join(FOLDER_NAME, f))]
     if not folderList: # if no folders have been found
         print("[bold red]No mangas found in working directory !")
         exit()
@@ -341,11 +342,11 @@ start = perf_counter()
 def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
         idManga = m["id"]
-        name = format_title(m["attributes"]["title"]["en"] if "en" in m["attributes"]["title"].keys() else m["attributes"]["title"].values()[0])
+        name = format_title(m["attributes"]["title"]["en"] if "en" in m["attributes"]["title"].keys() else list(m["attributes"]["title"].values())[0])
         if name not in os.listdir(os.getcwd()):
-            os.mkdir(f"{os.getcwd()}/{name}")
+            os.makedirs(f"{FOLDER_NAME}/{name}")
         try:
-            with open(f"{name}/infos.json", "x+", encoding="UTF-8") as file:
+            with open(f"{FOLDER_NAME}/{name}/infos.json", "x+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fsChoice,
                     "format" : qChoice,
@@ -357,7 +358,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
     
     else:
         name = m
-        with open(os.path.join(name, "infos.json"), "r", encoding="UTF-8") as file:
+        with open(os.path.join(FOLDER_NAME, name, "infos.json"), "r", encoding="UTF-8") as file:
             mangaInfos = json.load(file)
         idManga = mangaInfos["id"]
         qChoice = mangaInfos["format"]
