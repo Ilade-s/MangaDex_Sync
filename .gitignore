@@ -1,2 +1,4 @@
-# ignores all mangas folders (and __pycache__)
-/*
+/archive
+/__pycache__
+/.vscode
+search.json
