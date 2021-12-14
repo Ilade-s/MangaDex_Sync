@@ -70,12 +70,21 @@ def get_manga(fsChoice, qChoice, idManga, name):
     nNewImgs = 0
     taskId = prgbar.add_task(name, total=len(chapters))
     # setup chapter tasks
-    for i in range(0, len(chapters), SIMULTANEOUS_REQUESTS):
-        tasks = [Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId)) for c in chapters[i:i+SIMULTANEOUS_REQUESTS]]
-        for task in tasks:    
-            task.start()
-        while any([task.is_alive() for task in tasks]):
-            sleep(.1)
+    done_tasks = 0
+    tasks = [Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId)) 
+            for c in chapters[:SIMULTANEOUS_REQUESTS]]
+    for task in tasks:    
+        task.start()
+    while any([task.is_alive() for task in tasks]):
+        for task in tasks:
+            if not task.is_alive() and len(chapters) != SIMULTANEOUS_REQUESTS + done_tasks:
+                i = tasks.index(task)
+                c = chapters[SIMULTANEOUS_REQUESTS + done_tasks]
+                new_task = Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId))
+                new_task.start()
+                tasks[i] = new_task
+                done_tasks += 1
+        sleep(.5)
     if nNewImgs: # TODO
         print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
 
@@ -95,6 +104,7 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
         """
         requests the image to a server asynchronously
         """
+        #print("request_images chap {} vol {}".format(chap, vol))
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
         # If used, make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
@@ -119,9 +129,9 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
                     reqs = await asyncio.gather(*tasks)
                     for rep, img in zip(reqs, imgPaths):
-                        if rep.status_code == 429: # Too Many Requests (need to wait for limit)
-                            print('too much image requests for chapter {} vol {} ... (1s pause)'.format(chap, vol))
-                            await asyncio.sleep(.1)
+                        while rep.status_code == 429: # Too Many Requests (need to wait for limit)
+                            #print('too much image requests for chapter {} vol {} ...'.format(chap, vol))
+                            await asyncio.sleep(1)
                             rep = await client.get(f"{adress}/{img}", timeout=1000)
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
