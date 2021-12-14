@@ -1,7 +1,7 @@
 """
 Global variables used in scripts
 """
-FOLDER_PATH = 'archive' # name of the folder to store the mangas folders with the images
+FOLDER_PATH = 'archive' # path of the folder to store the mangas folders with the images (can be either relative to the script folder or absolute)
 SIMULTANEOUS_REQUESTS = 10 # should always be under 40 (10 is best)
 __VERSION__ = '1.1'
 __AUTHOR__ = 'Merlet Raphaël'

@@ -250,7 +250,8 @@ if newSync: # Search for a new manga and ask for storage choices
                 "pornographic"
             ]
         }
-    else:
+    
+    else: # search engine
         title = input("Search title : ")
         payload = {
         "title": title,
@@ -359,7 +360,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
         idManga = m["id"]
         name = format_title(m["attributes"]["title"]["en"] if "en" in m["attributes"]["title"].keys() else list(m["attributes"]["title"].values())[0])
-        if name not in os.listdir(os.getcwd()):
+        if name not in os.listdir(FOLDER_PATH):
             os.makedirs(f"{FOLDER_PATH}/{name}", exist_ok=True)
         try:
             with open(f"{FOLDER_PATH}/{name}/infos.json", "x+", encoding="UTF-8") as file:
