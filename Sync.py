@@ -173,11 +173,11 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
         images = loop.run_until_complete(request_images())
     else:
         images = []
-
+        
+    prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     task = Thread(target=save_chapter, args=(images, name, vol, chap, title, fileFormat, fsChoice))
     task.start()
     task.join()
-    prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
 
 def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoice) -> int:
     """
