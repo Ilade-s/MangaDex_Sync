@@ -75,7 +75,7 @@ def get_manga(fsChoice, qChoice, idManga, name):
             for c in chapters[:SIMULTANEOUS_REQUESTS]]
     for task in tasks:    
         task.start()
-    while any([task.is_alive() for task in tasks]):
+    while len(chapters) != SIMULTANEOUS_REQUESTS + done_tasks:
         for task in tasks:
             if not task.is_alive() and len(chapters) != SIMULTANEOUS_REQUESTS + done_tasks:
                 i = tasks.index(task)
@@ -84,7 +84,7 @@ def get_manga(fsChoice, qChoice, idManga, name):
                 new_task.start()
                 tasks[i] = new_task
                 done_tasks += 1
-        sleep(.5)
+        sleep(.1)
     if nNewImgs: # TODO
         print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
 
@@ -170,10 +170,11 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
     else:
         images = []
 
-    prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     task = Thread(target=save_chapter, args=(images, name, vol, chap, title, fileFormat, fsChoice))
     task.start()
     task.join()
+    prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
+
 
 def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoice) -> int:
     """
