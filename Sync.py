@@ -89,6 +89,7 @@ def get_manga(fsChoice, qChoice, idManga, name):
                 else:
                     not_done = False
         sleep(.1)
+    while any([task.is_alive() for task in tasks]): sleep(.1)
     if nNewImgs: # TODO
         print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
 
@@ -173,7 +174,7 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
         images = loop.run_until_complete(request_images())
     else:
         images = []
-        
+
     prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     task = Thread(target=save_chapter, args=(images, name, vol, chap, title, fileFormat, fsChoice))
     task.start()
