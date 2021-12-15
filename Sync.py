@@ -19,7 +19,7 @@ from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
 import asyncio # used to run async func
-from time import perf_counter, process_time, sleep, time # time is time since Epoch
+from time import perf_counter, sleep, time # time is time since Epoch
 from threading import Thread # Permet de faire tourner des fonctions en meme temps (async)
 from Globals import __AUTHOR__, __VERSION__, FOLDER_PATH, format_title, SIMULTANEOUS_REQUESTS
 
@@ -152,17 +152,15 @@ def get_chapter_data(*args):
                 try:
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
                     reqs = await asyncio.gather(*tasks)
-                    for rep, img in zip(reqs, imgPaths):
-                        while rep.status_code == 429: # Too Many Requests (need to wait for limit)
-                            #print('too much image requests for chapter {} vol {} ...'.format(chap, vol))
-                            await asyncio.sleep(1)
-                            rep = await client.get(f"{adress}/{img}", timeout=1000)
+                    for rep in reqs:
+                        rep.raise_for_status()
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
                 except Exception as e:
                     print(f'An exception occurred when gathering chap {chap} images : {e} (will retry {retries_left} more times)')
                     retries_left -= 1
                     if retries_left:
+                        await asyncio.sleep(1)
                         continue
                     else:
                         print(f"Chap {chap} ignored because 5 exceptions occured")
@@ -275,22 +273,24 @@ if newSync: # Search for a new manga and ask for storage choices
     else: # search engine
         title = input("Search title : ")
         payload = {
-        "title": title,
-        "limit": 9, # numbers of results to choose from (9 by default : 10 results)
-        "offset": 0,
-        "contentRating[]": [
-            "safe",
-            "suggestive",
-            "erotica",
-            "pornographic"
-        ],
-        # tag exemples
-        #"includedTags[]": [
-        #    "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
-        #    "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
-        #    "caaa44eb-cd40-4177-b930-79d3ef2afe87" # School
-        #]
-        # you can edit this dictionary by adding tags (like above, exemples in tags.json)
+            "title": title,
+            "limit": 9, # numbers of results to choose from (9 by default : 10 results)
+            "offset": 0,
+            "contentRating[]": [
+                "safe",
+                "suggestive",
+                "erotica",
+                "pornographic"
+            ],
+            "hasAvailableChapters": "1",
+            "order[relevance]": "desc"
+            # tag exemples
+            #"includedTags[]": [
+            #    "423e2eae-a7a2-4a8b-ac03-a8351462d71d", # romance
+            #    "e5301a23-ebd9-49dd-a0cb-2add944c7fe9", # SoL
+            #    "caaa44eb-cd40-4177-b930-79d3ef2afe87" # School
+            #]
+            # you can edit this dictionary by adding tags (like above, exemples in tags.json)
         }
 
     r = req.get(f"{base}/manga", params=payload)
