@@ -261,6 +261,8 @@ if newSync: # Search for a new manga and ask for storage choices
         links = input("Adress(es) to manga(s) (espaces between each adresses/ids) : ")
         ids = [link.split('/')[-2] if len(link) > 36 else link for link in links.split(' ')]
         payload = {
+            "limit": 9, # numbers of results to choose from (9 by default : 10 results)
+            "offset": 0,
             "ids[]": ids,
             "contentRating[]": [
                 "safe",
@@ -294,39 +296,49 @@ if newSync: # Search for a new manga and ask for storage choices
         }
 
     r = req.get(f"{base}/manga", params=payload)
-    #print(r.text)
-    print("Status code search :", r.status_code)
-
     data = r.json()
-    #print(data)
     with open("search.json", "w+", encoding="UTF-8") as file:
         json.dump(data, file)
-
-    print("============================================")
-    print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
-    if data["data"]: # results found
-        for i in range(len(data["data"])):
-            title = data["data"][i]["attributes"]["title"]["en"] if "en" in data["data"][i]["attributes"]["title"].keys() else list(data["data"][i]["attributes"]["title"].values())[0]
-            print(f"\t{i+1} : {title}")
-    else: # no results found
-        print("\t[bold red]No results !")
-        exit()
-    print("============================================")
     
+    page = 1
+    def show_titles(data):
+        # clear console
+        if os.name == "nt": # for Windows
+            os.system('cls')
+        elif os.name == "posix": # for Linux and Mac
+            os.system('clear')
+        print("============================================")
+        print("[bold blue]PAGE {}".format(page))
+        print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
+        if data: # results found
+            for i in range(len(data['data'])):
+                title = data['data'][i]["attributes"]["title"]["en"] if "en" in data['data'][i]["attributes"]["title"].keys() else list(data['data'][i]["attributes"]["title"].values())[0]
+                print(f"\t{i+1} : {title}")
+        else: # no results found
+            print("\t[bold red]No results !")
+            exit()
+        print("============================================")
     
-    with open("search.json", "r", encoding="UTF-8") as file:
-        dataSearch = json.load(file)
+    show_titles(data)
 
     # Search choice
-    mChoice = input(f"Choice (all if empty // space between values): ")
-    if mChoice:
+    mChoice = input(f"Choice (all if empty // space between values // +/- to change page): ")
+    while mChoice in ('+', '-'): # page change
+        page += 1 if mChoice == '+' else -1
+        if page < 1: page = 1
+        payload['offset'] = (page - 1) * payload['limit']
+        r = req.get(f"{base}/manga", params=payload)
+        data = r.json()
+        show_titles(data)
+        mChoice = input(f"Choice (all if empty // space between values // +/- to change page): ")
+    if mChoice:  
         try:
-            mList = [dataSearch["data"][int(i)-1] for i in mChoice.split(" ")]
+            mList = [data["data"][int(i)-1] for i in mChoice.split(" ")]
         except Exception:
             print("[bold red]Invalid choice")
             exit()
     else:
-        mList = dataSearch["data"]
+        mList = data["data"]
     
     print("============================================")
     print("[bold green]File system :")
