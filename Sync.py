@@ -25,11 +25,11 @@ from Globals import __AUTHOR__, __VERSION__, FOLDER_PATH, format_title, SIMULTAN
 
 base = "https://api.mangadex.org" # base adress for the API endpoints
 
-def get_manga(fsChoice, qChoice, idManga, name):
+def get_manga(*args):
     """
     called for each chapter concurrently, take care of doing the requests and saving the pages
     """
-
+    (fsChoice, qChoice, idManga, name, presentChapters) = args
     payloadManga = {
         "translatedLanguage[]": [
             #"fr", 
@@ -57,8 +57,9 @@ def get_manga(fsChoice, qChoice, idManga, name):
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
         chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
-                                    if c["attributes"]["chapter"] != None 
-                                    else 0))                            
+                                    if c["attributes"]["chapter"] != None
+                                    else 0))       
+        # remove duplicates and already present chapters                     
         n = 'aaaaa'                           
         for c in chapters:
             ni = c["attributes"]["chapter"]
@@ -66,20 +67,26 @@ def get_manga(fsChoice, qChoice, idManga, name):
                 chapters.remove(c)
             else:
                 n = ni
+        chapters = [c for c in chapters if str(c["attributes"]["chapter"]) not in presentChapters and c["attributes"]["data"]]
 
-    nNewImgs = 0
-    taskId = prgbar.add_task(name, total=len(chapters))
+    taskId = prgbar.add_task(name, total=len(chapters) if chapters else 1)
+    if not chapters: # if there is no new chapters, fill progress bar and quit func
+        prgbar.update(taskId, description=f'{name} (no new chapters)', advance=1)
+        sleep(1.0)
+        prgbar.remove_task(taskId)
+        return
     # setup chapter tasks
     done_tasks = 0
     tasks = [Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId)) 
             for c in chapters[:SIMULTANEOUS_REQUESTS]]
+    initial_tasks = len(tasks)
     for task in tasks:    
         task.start()
     not_done = True
     while not_done:
         for task in tasks:
             if not task.is_alive():
-                if len(chapters) - 1 != SIMULTANEOUS_REQUESTS + done_tasks:
+                if len(chapters) < initial_tasks + done_tasks: # if there is remaining tasks to add
                     i = tasks.index(task)
                     c = chapters[SIMULTANEOUS_REQUESTS + done_tasks]
                     new_task = Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId))
@@ -90,12 +97,22 @@ def get_manga(fsChoice, qChoice, idManga, name):
                     not_done = False
         sleep(.1)
     while any([task.is_alive() for task in tasks]): sleep(.1)
-    if nNewImgs: # TODO
-        print(f"[bold blue]{nNewImgs}[/bold blue] images have been added to the [bold red]{name}/chapters/[/bold red] folder")
 
-    prgbar.remove_task(taskId)
+    with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
+        newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters if chapter["attributes"]["data"]]))
+        newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
+        mangaInfos = {
+            "fileSys" : fsChoice,
+            "format" : qChoice,
+            "id": idManga,
+            "name" : name,
+            "chapterList": presentChapters + newPresentChapters
+        }
+        json.dump(mangaInfos, file)
 
-def get_chapter_data(c, quality, name, fsChoice, idTask):
+    prgbar.update(taskId, description=f'{name} ({len(chapters)} new chapters)', advance=1)
+
+def get_chapter_data(*args):
     """
     Get all pages from imgPaths from the chapter with the hash
     args:
@@ -105,6 +122,8 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
 
     output : int : number of added images
     """
+    (c, quality, name, fsChoice, idTask) = args
+
     async def request_images() -> list:
         """
         requests the image to a server asynchronously
@@ -153,7 +172,6 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
     # chapter infos
     vol = c["attributes"]["volume"]
     chap = c["attributes"]["chapter"]
-    id = c["id"]
     imgPaths = c["attributes"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
     hash = c["attributes"]["hash"]
     fileFormat = "png" if quality else "jpg"
@@ -180,7 +198,7 @@ def get_chapter_data(c, quality, name, fsChoice, idTask):
     task.start()
     task.join()
 
-def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoice) -> int:
+def save_chapter(*args) -> int:
     """
     called by get_chapter_pages saves the images of the chapter in the correct folder
     param : images : list[bytes] : list of all the pages in bytes
@@ -188,6 +206,7 @@ def save_chapter(images: list[bytes], name, vol, chap, title, fileFormat, fsChoi
 
     sortie : int : number of new images saved for this chapter
     """
+    (images, name, vol, chap, title, fileFormat, fsChoice) = args
     new_imgs = 0
     for img in images:
         try:
@@ -222,7 +241,9 @@ print("============================================")
 print(f"Mangadex Downloader/Sync script v{__VERSION__}")
 print(f"By {__AUTHOR__}")
 print("============================================")
-newSync = (1 if input("[S]earch for a new manga (or [U]pdate existant one) (S/U) ? ") == "S" else 0)
+choices = input("[S]earch for a new manga // [U]pdate existant one // [V]erify folder state \n\t(S/U/V) ([V]erify only by default) ? ").split(' ')
+newSync = (1 if "S" in choices else 0)
+isUpdate = (1 if "U" in choices else 0)
 
 # User interaction
 if newSync: # Search for a new manga and ask for storage choices
@@ -350,7 +371,26 @@ else: # Ask which manga(s) must be updated
         except Exception:
             print("[bold red]Invalid choice")
             exit()
-
+    
+    nChanges = 0
+    for m in mList:
+        chapterList = []
+        for vol in [f for f in os.listdir(os.path.join(FOLDER_PATH, m, "chapters")) if os.path.isdir(os.path.join(FOLDER_PATH, m, "chapters", f))]:
+            volChapList = [chap.split('-')[1] for chap in os.listdir(os.path.join(FOLDER_PATH, m, "chapters", vol))]
+            chapterList.extend(volChapList)
+        chapterList = list(set(chapterList))
+        chapterList.sort(key=lambda c: (float(c) if c != None and c != 'None' else 0))
+        with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
+            mangaInfos = json.load(file)
+        if chapterList != mangaInfos['chapterList']:
+            mangaInfos['chapterList'] = chapterList
+            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+                json.dump(mangaInfos, file)
+            nChanges += 1
+    print('[bold blue]{} changes to infos.json files have been made'.format((nChanges if nChanges else 'No')))
+    if not isUpdate:
+        exit()
+        
 # create progress bar for mangas
 prgbar = Progress()
 prgbar.start()
@@ -358,17 +398,19 @@ start = perf_counter()
 # for each manga
 def get_param_manga(m, fsChoice='', qChoice=''):
     if newSync:
+        presentChapters = []
         idManga = m["id"]
         name = format_title(m["attributes"]["title"]["en"] if "en" in m["attributes"]["title"].keys() else list(m["attributes"]["title"].values())[0])
         if name not in os.listdir(FOLDER_PATH):
-            os.makedirs(f"{FOLDER_PATH}/{name}", exist_ok=True)
+            os.makedirs(os.path.join(FOLDER_PATH, name), exist_ok=True)
         try:
-            with open(f"{FOLDER_PATH}/{name}/infos.json", "x+", encoding="UTF-8") as file:
+            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "x+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fsChoice,
                     "format" : qChoice,
                     "id": idManga,
-                    "name" : name
+                    "name" : name,
+                    "chapterList": presentChapters
                 }
                 json.dump(mangaInfos, file)
         except FileExistsError: pass
@@ -380,8 +422,27 @@ def get_param_manga(m, fsChoice='', qChoice=''):
         idManga = mangaInfos["id"]
         qChoice = mangaInfos["format"]
         fsChoice = mangaInfos["fileSys"]
+        if "chapterList" in mangaInfos.keys(): # updated infos.json
+            presentChapters = mangaInfos["chapterList"]
+        else: # old infos.json, need to add present chapters
+            with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
+                chapters = json.load(file)   
+                chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
+                                    if c["attributes"]["chapter"] != None 
+                                    else 0))      
+                presentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
+                presentChapters.sort(key=lambda c: (float(c) if c != None else 0))
+            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
+                mangaInfos = {
+                    "fileSys" : fsChoice,
+                    "format" : qChoice,
+                    "id": idManga,
+                    "name" : name,
+                    "chapterList": presentChapters
+                }
+                json.dump(mangaInfos, file)
     
-    return fsChoice, qChoice, idManga, name
+    return fsChoice, qChoice, idManga, name, presentChapters
 
 manga_tasks = [Thread(target=get_manga, args=get_param_manga(m, fsChoice, qChoice) if newSync 
                     else get_param_manga(m)) for m in mList]
