@@ -301,35 +301,43 @@ if newSync: # Search for a new manga and ask for storage choices
         json.dump(data, file)
     
     page = 1
-    def show_titles(data):
+    def show_titles(data, info=''):
         # clear console
         if os.name == "nt": # for Windows
             os.system('cls')
         elif os.name == "posix": # for Linux and Mac
             os.system('clear')
+        # print info message if there is one
+        if info:
+            print('[bold red] Already at {}'.format(info))
         print("============================================")
         print("[bold blue]PAGE {}".format(page))
         print(f"Search results... (results {data['offset']+1} to {data['offset']+data['limit']})")
-        if data: # results found
+        if data['data']: # results found
             for i in range(len(data['data'])):
                 title = data['data'][i]["attributes"]["title"]["en"] if "en" in data['data'][i]["attributes"]["title"].keys() else list(data['data'][i]["attributes"]["title"].values())[0]
                 print(f"\t{i+1} : {title}")
         else: # no results found
             print("\t[bold red]No results !")
-            exit()
         print("============================================")
     
-    show_titles(data)
-
     # Search choice
+    show_titles(data)
     mChoice = input(f"Choice (all if empty // space between values // +/- to change page): ")
     while mChoice in ('+', '-'): # page change
+        info = ''
         page += 1 if mChoice == '+' else -1
-        if page < 1: page = 1
-        payload['offset'] = (page - 1) * payload['limit']
-        r = req.get(f"{base}/manga", params=payload)
-        data = r.json()
-        show_titles(data)
+        if page < 1: 
+            page = 1
+            info = 'first page'
+        if not data['data'] and mChoice == '+':
+            page -= 1
+            info = 'last page'
+        else:
+            payload['offset'] = (page - 1) * payload['limit']
+            r = req.get(f"{base}/manga", params=payload)
+            data = r.json()
+        show_titles(data, info)
         mChoice = input(f"Choice (all if empty // space between values // +/- to change page): ")
     if mChoice:  
         try:
