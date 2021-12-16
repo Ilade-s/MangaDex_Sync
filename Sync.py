@@ -85,8 +85,10 @@ def get_manga(*args):
     not_done = True
     while not_done:
         for task in tasks:
+            #print(len(chapters))
+            #print(initial_tasks + done_tasks)
             if not task.is_alive():
-                if len(chapters) < initial_tasks + done_tasks: # if there is remaining tasks to add
+                if len(chapters) > initial_tasks + done_tasks: # if there is remaining tasks to add
                     i = tasks.index(task)
                     c = chapters[SIMULTANEOUS_REQUESTS + done_tasks]
                     new_task = Thread(target=get_chapter_data, args=(c, qChoice, name, fsChoice, taskId))
@@ -152,15 +154,16 @@ def get_chapter_data(*args):
                 try:
                     tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
                     reqs = await asyncio.gather(*tasks)
+                    error_429 = False
                     for rep in reqs:
-                        rep.raise_for_status()
+                        if rep.status_code == 429: error_429 = True
+                    if error_429: await asyncio.sleep(1)
                     images = [rep.content for rep in reqs]
                     error_encountered = 0
                 except Exception as e:
                     print(f'An exception occurred when gathering chap {chap} images : {e} (will retry {retries_left} more times)')
                     retries_left -= 1
                     if retries_left:
-                        await asyncio.sleep(1)
                         continue
                     else:
                         print(f"Chap {chap} ignored because 5 exceptions occured")
@@ -239,7 +242,8 @@ print("============================================")
 print(f"Mangadex Downloader/Sync script v{__VERSION__}")
 print(f"By {__AUTHOR__}")
 print("============================================")
-choices = input("[S]earch for a new manga // [U]pdate existant one // [V]erify folder state \n\t(S/U/V) ([V]erify only by default) ? ").split(' ')
+choices = input("[S]earch for a new manga // [U]pdate existant one // [V]erify folder state \n\t(S/U/V) ([V]erify only by default) ? "
+                ).split(' ')
 newSync = (1 if "S" in choices else 0)
 isUpdate = (1 if "U" in choices else 0)
 
