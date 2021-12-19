@@ -42,12 +42,18 @@ def get_manga(*args):
     
     with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "w+", encoding="UTF-8") as file:
         r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+        while r3.status_code == 429:
+            sleep(1.0)
+            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         mangaFeed = r3.json()
         chapters = mangaFeed['data']
         # if manga have 500+ chapters
         while mangaFeed['total'] > (len(mangaFeed['data']) + 500*mangaFeed['offset']):
             mangaFeed['offset'] += 1 
             r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+            while r3.status_code == 429:
+                sleep(1.0)
+                r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
             chapters += mangaFeed['data']
 
