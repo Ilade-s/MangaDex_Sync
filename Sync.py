@@ -167,29 +167,27 @@ def get_chapter_data(*args):
             return []
         # else, setup an async client and gather the images
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
-        async with httpx.AsyncClient() as client: 
-            error_encountered = 1
+        async with httpx.AsyncClient() as client:
             retries_left = 5
-            while error_encountered:
-                try:
-                    tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
-                    reqs = await asyncio.gather(*tasks)
-                    error_429 = False
-                    for rep in reqs:
-                        if rep.status_code == 429: error_429 = True
-                    if error_429: await asyncio.sleep(1)
-                    images = [rep.content for rep in reqs]
-                    error_encountered = 0
-                except Exception as e:
-                    print(f'An exception occurred when gathering chap {chap} images : {e} (will retry {retries_left} more times)')
-                    retries_left -= 1
-                    if retries_left:
-                        continue
-                    else:
-                        print(f"Chap {chap} ignored because 5 exceptions occured")
-                        images = []
-                        break
+            tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
+            reqs = await asyncio.gather(*tasks)   
+            status_code_errors = [req.status_code for req in reqs if str(req.status_code)[0] != '2']
+            while status_code_errors and retries_left:
+                print(f'An exception occurred when gathering chap {chap} images with the status code(s) {", ".join(status_code_errors)} (will retry {retries_left} more times)')
+                retries_left -= 1
+                await asyncio.sleep(1)
+                tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
+                reqs = await asyncio.gather(*tasks)
+                status_code_errors = [req.status_code for req in reqs if str(req.status_code)[0] != '2']
+            
+            if status_code_errors:
+                print(f"Chap {chap} ignored because 5 exceptions occured")
+                images = []
+            else:
+                images = [rep.content for rep in reqs]
+
         return images
+
     # chapter infos
     vol = c["attributes"]["volume"]
     chap = c["attributes"]["chapter"]
