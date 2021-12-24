@@ -138,20 +138,34 @@ def get_chapter_data(*args):
         """
         #print("request_images chap {} vol {}".format(chap, vol))
         baseServer = 'https://uploads.mangadex.org'
-        # Ask an adress for M@H for each chapter (useless because when not logged in, defaults to 'https://uploads.mangadex.org')
-        # If used, make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        #rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        #dataServer = rServ.json()
-        #try:
-        #    baseServer = dataServer["baseUrl"]
-        #except KeyError: # request failed
-        #    time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
-        #    await asyncio.sleep(time_to_wait)
-        #    rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
-        #    dataServer = rServ.json()
-        #    baseServer = dataServer["baseUrl"]
-        #dataServer = rServ.json()
-
+        # Ask an adress for M@H for each chapter
+        # Will make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
+        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        
+        while rServ.status_code == 429 or rServ.json()['result'] != 'ok': # request failed
+            time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
+            await asyncio.sleep(time_to_wait)
+            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+            
+        dataServer = rServ.json()
+        baseServer = dataServer["baseUrl"]
+        hash = dataServer["chapter"]["hash"]
+        imgPaths = dataServer["chapter"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
+        # filtering of existent images
+        if fsChoice:    
+            imgsToGet = [img for img in imgPaths 
+            if not os.path.exists(
+                os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", 
+                            f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
+        else:
+            imgsToGet = [img for img in imgPaths 
+            if not os.path.exists(
+                os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}",
+                            f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
+        # if there is no images to get, exits
+        if not imgsToGet:
+            return []
+        # else, setup an async client and gather the images
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
         async with httpx.AsyncClient() as client: 
             error_encountered = 1
@@ -179,9 +193,8 @@ def get_chapter_data(*args):
     # chapter infos
     vol = c["attributes"]["volume"]
     chap = c["attributes"]["chapter"]
-    imgPaths = c["attributes"][("data" if quality else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
-    hash = c["attributes"]["hash"]
     fileFormat = "png" if quality else "jpg"
+    id = c["id"]
     # get the title
     try:
         if not c["attributes"]["title"]:
@@ -190,15 +203,8 @@ def get_chapter_data(*args):
     except Exception:
         title = "NoTitle"
     # check for already downloaded images in directory
-    if fsChoice:    
-        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"))]
-    else:
-        imgsToGet = [img for img in imgPaths if not os.path.exists(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"))]
-    if imgsToGet:
-        loop = asyncio.new_event_loop()
-        images = loop.run_until_complete(request_images())
-    else:
-        images = []
+    loop = asyncio.new_event_loop()
+    images = loop.run_until_complete(request_images())
 
     prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     task = Thread(target=save_chapter, args=(images, name, vol, chap, title, fileFormat, fsChoice))
@@ -404,6 +410,8 @@ else: # Ask which manga(s) must be updated
     
     nChanges = 0
     for m in mList:
+        if not os.path.isdir(os.path.join(FOLDER_PATH, m, "chapters")):
+            os.mkdir(os.path.join(FOLDER_PATH, m, "chapters"))
         chapterList = []
         for vol in [f for f in os.listdir(os.path.join(FOLDER_PATH, m, "chapters")) if os.path.isdir(os.path.join(FOLDER_PATH, m, "chapters", f))]:
             volChapList = [chap.split('-')[1] for chap in os.listdir(os.path.join(FOLDER_PATH, m, "chapters", vol))]
