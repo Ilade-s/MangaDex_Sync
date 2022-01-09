@@ -25,6 +25,9 @@ from Globals import __AUTHOR__, __VERSION__, FOLDER_PATH, format_title, SIMULTAN
 
 base = "https://api.mangadex.org" # base adress for the API endpoints
 
+if not os.path.exists(FOLDER_PATH):
+    os.makedirs(FOLDER_PATH)
+
 def get_manga(*args):
     """
     called for each chapter concurrently, take care of doing the requests and saving the pages
@@ -73,7 +76,7 @@ def get_manga(*args):
                 chapters.remove(c)
             else:
                 n = ni
-        chapters = [c for c in chapters if str(c["attributes"]["chapter"]) not in presentChapters and c["attributes"]["data"]]
+        chapters = [c for c in chapters if str(c["attributes"]["chapter"]) not in presentChapters]
 
     taskId = prgbar.add_task(name, total=len(chapters) if chapters else 1)
     if not chapters: # if there is no new chapters, fill progress bar and quit func
@@ -107,7 +110,7 @@ def get_manga(*args):
     while any([task.is_alive() for task in tasks]): sleep(.1)
 
     with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
-        newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters if chapter["attributes"]["data"]]))
+        newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
         newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
         mangaInfos = {
             "fileSys" : fsChoice,
@@ -418,12 +421,14 @@ else: # Ask which manga(s) must be updated
         chapterList.sort(key=lambda c: (float(c) if c != None and c != 'None' else 0))
         with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
             mangaInfos = json.load(file)
-        if chapterList != mangaInfos['chapterList']:
+        if 'chapterList' not in mangaInfos.keys():
+            mangaInfos['chapterList'] = []
+        elif chapterList != mangaInfos['chapterList']:
             mangaInfos['chapterList'] = chapterList
-            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
-                json.dump(mangaInfos, file)
             nChanges += 1
-    print('[bold blue]{} changes to infos.json files have been made'.format((nChanges if nChanges else 'No')))
+        with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+                json.dump(mangaInfos, file)
+    print('[bold blue]Verification : {} changes to infos.json files have been made'.format((nChanges if nChanges else 'No')))
     if not isUpdate:
         exit()
         
