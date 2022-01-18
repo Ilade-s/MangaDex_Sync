@@ -87,15 +87,15 @@ for m in titlelist:
         vol = c["attributes"]["volume"]
         chap = c["attributes"]["chapter"]
         id = c["id"]
-        imgPaths = c["attributes"][("data" if fileFormat == 'png' else "dataSaver")] # ["dataSaver"] for jpg (smaller size)
-        hash = c["attributes"]["hash"]
         try:
             if not c["attributes"]["title"]:
                 title = "NoTitle"
             title = format_title(c["attributes"]["title"])
         except Exception:
             title = "NoTitle"
+
         if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
+            imgPaths = os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
             for img in imgPaths: # for each image
                 try:
                     with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
@@ -114,6 +114,7 @@ for m in titlelist:
                 pass
         # ==============================================================
         else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
+            imgPaths = [img for img in os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}")) if img.split('-')[1] == chap]
             for img in imgPaths: # for each image
                 # create folder
                 os.makedirs(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 

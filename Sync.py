@@ -19,14 +19,82 @@ from rich.progress import * # progress bar
 import json # json handling
 import os # IO (mkdir)
 import asyncio # used to run async func
+from getpass import getpass # to get password without echo on terminal
 from time import perf_counter, sleep, time # time is time since Epoch
 from threading import Thread # Permet de faire tourner des fonctions en meme temps (async)
-from Globals import __AUTHOR__, __VERSION__, FOLDER_PATH, format_title, SIMULTANEOUS_REQUESTS
+from Globals import __AUTHOR__, __VERSION__, FOLDER_PATH, LOGIN_PATH, format_title, SIMULTANEOUS_REQUESTS
 
 base = "https://api.mangadex.org" # base adress for the API endpoints
 
-if not os.path.exists(FOLDER_PATH):
-    os.makedirs(FOLDER_PATH)
+class Account:
+    """classe qui gère le login et la validité du token, et renvoie le bearer de connexion"""
+    def __init__(self, login_path=LOGIN_PATH) -> None:
+        self.login_path = login_path
+        self._in_check = False
+        self._token = ""
+        self.user = ""
+        self._refresh_token = ""
+        self.connected = False
+        self._refresh_token = ""
+            
+    def login(self):
+        """front login func (console input)"""
+        username = input('username : ')
+        password = getpass('password : ')   
+        self.user = username
+        self.pwd = password
+        self._token, self._refresh_token = self.__login()
+        with open(self.login_path, 'x+') as file:
+            txt = {
+                'token': self.token,
+                'refresh_token': self._refresh_token
+            }
+            json.dump(txt, file)
+    
+    def relogin(self, refresh_token: str):
+        """front relogin func, using __refresh_token if necessary (if valid refresh token found at login_path)"""
+        self._refresh_token = refresh_token
+        return self.token
+
+    def __login(self):
+        """back login func"""
+        payload = {
+            'username': self.user,
+            'email': self.user,
+            'password': self.pwd
+        }
+
+        rep = req.post(f'{base}/auth/login', json=payload)
+        repJson = rep.json()
+        assert repJson['result'] == 'ok', 'login failed (invalid credentials ?) : {}'.format(repJson) # check if login succeded
+        print('[bold green]login succeded...')
+        self.connected = True
+        return repJson['token']['session'], repJson['token']['refresh']
+
+    def __check_token(self) -> bool:
+        self._in_check = True
+        hdrs = self.bearer
+        self._in_check = False
+        return req.get(f'{base}/auth/check', headers=hdrs).json()['isAuthenticated']
+
+    def __refresh_login(self):
+        rep = req.post(f'{base}/auth/refresh', json={'token': self._refresh_token})
+        repJson = rep.json()
+        if repJson['result'] == 'ok':
+            self.connected = True
+            return repJson['token']['session'], repJson['token']['refresh']
+        else:
+            return self.__login() if self.user else self.login()
+
+    @property
+    def token(self):
+        if not self._in_check and not self.__check_token():
+            self._token, self._refresh_token = self.__refresh_login()
+        return self._token
+    
+    @property
+    def bearer(self):
+        return {'Authorization': 'Bearer ' + self.token} if self.connected else {}
 
 def get_manga(*args):
     """
@@ -251,10 +319,35 @@ def save_chapter(*args) -> int:
 
     return new_imgs
 
+if not os.path.exists(FOLDER_PATH):
+    os.makedirs(FOLDER_PATH)
+
 print("============================================")
 print(f"Mangadex Downloader/Sync script v{__VERSION__}")
 print(f"By {__AUTHOR__}")
 print("============================================")
+
+# LOGIN ===========================
+account = Account() 
+if os.path.exists(LOGIN_PATH):
+    with open(LOGIN_PATH, 'r') as file:
+        content = file.read()
+        if content: # token
+            print('[bold green]login tokens found...')
+            tokens = json.loads(content)
+            refresh_token = tokens['refresh_token']
+            account.relogin(refresh_token)
+        else:
+            print('[bold red]Invalid token file, need to login again :')
+            account.login()
+else:
+    print('[bold red]No login token found...')
+    confirm = input("Do you want to login (y/N) ? ")
+    if confirm == 'y':
+        account.login()
+print(account.bearer)
+# LOGIN ==========================
+
 choices = input("[S]earch for a new manga // [U]pdate existant one // [V]erify folder state \n\t(S/U/V) ([V]erify only by default) ? "
                 ).split(' ')
 newSync = (1 if "S" in choices else 0)
