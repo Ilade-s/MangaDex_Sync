@@ -51,8 +51,9 @@ class Account:
             }
             json.dump(txt, file)
     
-    def relogin(self, refresh_token: str):
+    def relogin(self, token: str, refresh_token: str):
         """front relogin func, using __refresh_token if necessary (if valid refresh token found at login_path)"""
+        self._token = token
         self._refresh_token = refresh_token
         return self.token
 
@@ -335,8 +336,9 @@ if os.path.exists(LOGIN_PATH):
         if content: # token
             print('[bold green]login tokens found...')
             tokens = json.loads(content)
+            token = tokens['token']
             refresh_token = tokens['refresh_token']
-            account.relogin(refresh_token)
+            account.relogin(token, refresh_token)
         else:
             print('[bold red]Invalid token file, need to login again :')
             account.login()
@@ -345,7 +347,7 @@ else:
     confirm = input("Do you want to login (y/N) ? ")
     if confirm == 'y':
         account.login()
-print(account.bearer)
+#print(account.bearer)
 # LOGIN ==========================
 
 choices = input("[S]earch for a new manga // [U]pdate existant one // [V]erify folder state \n\t(S/U/V) ([V]erify only by default) ? "
