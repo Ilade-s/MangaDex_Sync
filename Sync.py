@@ -98,8 +98,8 @@ class Account:
 
     @property
     def token(self):
-        if not self._in_check:
-            if time() - self.last_check > 14 * 60 or not self.__check_token():
+        if not self._in_check and time() - self.last_check > 14 * 60:
+            if not self.__check_token():
                 self._token, self._refresh_token = self.__refresh_login()
         return self._token
     
@@ -221,17 +221,21 @@ def get_chapter_data(*args):
         """
         requests the image to a server asynchronously
         """
+        atHome_payload = {'forcePort443': True}
         #print("request_images chap {} vol {}".format(chap, vol))
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter
         # Will make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000)
+        rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000, params=atHome_payload)
         
         while rServ.status_code == 429 or rServ.json()['result'] != 'ok': # request failed
-            time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
+            if 'X-RateLimit-Retry-After' in rServ.headers.keys():
+                time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
+            else:
+                time_to_wait = 10.0
             await asyncio.sleep(time_to_wait)
-            sync_client.headers = account.bearer # check if token is still valid
-            rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000)
+            #sync_client.headers = account.bearer # check if token is still valid
+            rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000, params=atHome_payload)
             
         dataServer = rServ.json()
         baseServer = dataServer["baseUrl"]
