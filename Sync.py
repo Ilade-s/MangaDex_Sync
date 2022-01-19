@@ -30,11 +30,9 @@ class Account:
     """classe qui gère le login et la validité du token, et renvoie le bearer de connexion"""
     def __init__(self, login_path=LOGIN_PATH) -> None:
         self.login_path = login_path
-        self._in_check = False
         self._token = ""
         self.user = ""
         self._refresh_token = ""
-        self.connected = False
         self._refresh_token = ""
         self.last_check = time() - 15 * 60
             
@@ -59,9 +57,8 @@ class Account:
         """front relogin func, using __refresh_token if necessary (if valid refresh token found at login_path)"""
         self._token = token
         self._refresh_token = refresh_token
-        self.connected = True
-        if not self.__check_token():
-            self.__refresh_login()
+        if not self.check_token():
+            self._token, self._refresh_token = self.__refresh_login()
         self.last_check = time()
         return self._token
 
@@ -80,10 +77,8 @@ class Account:
         self.connected = True
         return repJson['token']['session'], repJson['token']['refresh']
 
-    def __check_token(self) -> bool:
-        self._in_check = True
-        hdrs = self.bearer
-        self._in_check = False
+    def check_token(self) -> bool:
+        hdrs = {'Authorization': 'Bearer ' + self._token}
         self.last_check = time()
         return req.get(f'{base}/auth/check', headers=hdrs).json()['isAuthenticated']
 
@@ -91,21 +86,20 @@ class Account:
         rep = req.post(f'{base}/auth/refresh', json={'token': self._refresh_token})
         repJson = rep.json()
         if repJson['result'] == 'ok':
-            self.connected = True
             return repJson['token']['session'], repJson['token']['refresh']
         else:
             return self.__login() if self.user else self.login()
 
     @property
     def token(self):
-        if not self._in_check and time() - self.last_check > 14 * 60:
-            if not self.__check_token():
+        if time() - self.last_check > 14 * 60:
+            if not self.check_token():
                 self._token, self._refresh_token = self.__refresh_login()
         return self._token
     
     @property
     def bearer(self):
-        return {'Authorization': 'Bearer ' + self.token} if self.connected else {}
+        return {'Authorization': 'Bearer ' + self.token} if self.check_token() else {}
 
 def get_manga(*args):
     """
@@ -351,7 +345,7 @@ account = Account()
 if os.path.exists(LOGIN_PATH):
     with open(LOGIN_PATH, 'r') as file:
         content = file.read()
-        if content: # token
+        if content: # token found
             print('[bold green]login tokens found...')
             tokens = json.loads(content)
             token = tokens['token']
@@ -379,13 +373,22 @@ if newSync: # Search for a new manga and ask for storage choices
     print("Search type :")
     print("\t- 0 : Search engine")
     print("\t- 1 : Link to manga page")
+    print("\t- 2 : Import user follows (login required)")
     print("============================================")
-    isLink = input("Choice (0 or 1) : ")
-    try:
-        isLink = int(isLink)
-    except Exception:
-        print("[bold red]Invalid choice")
-        exit()
+    choice = input("Choice (0, 1 or 2 // default is 0) : ")
+    while not (choice == '0' or choice == '1' or (choice == '2' and account.check_token())):
+        if choice == '2':
+            print('[bold red]Not logged in')
+        else:    
+            print('[bold red]Choice is invalid')
+        choice = input("Choice (0, 1 or 2 // default is 0) : ")
+    
+    if choice == '1':
+        isLink = True
+        isFollows = False
+    elif choice == '2':
+        isLink = False
+        isFollows = True
     
     if isLink: # links to page (need to get the page)
         links = input("Adress(es) to manga(s) (espaces between each adresses/ids) : ")
@@ -400,6 +403,12 @@ if newSync: # Search for a new manga and ask for storage choices
                 "erotica",
                 "pornographic"
             ]
+        }
+    
+    elif isFollows: # import of user follows
+        payload = {
+            'limit': 9,
+            'offset': 0
         }
     
     else: # search engine
@@ -424,9 +433,19 @@ if newSync: # Search for a new manga and ask for storage choices
             #]
             # you can edit this dictionary by adding tags (like above, exemples in tags.json)
         }
-
-    r = req.get(f"{base}/manga", params=payload)
-    data = r.json()
+    def search() -> dict:
+        r = req.get(f"{base}/manga", params=payload)
+        return r.json()
+    def get_follows() -> dict:
+        r = req.get(f"{base}/user/follows/manga", params=payload, headers=account.bearer)
+        assert r.json()['result'] == 'ok', "follows gathering failed"
+        return r.json()
+    
+    if isFollows:
+        data = get_follows()
+    else:
+        data = search()
+    
     with open("search.json", "w+", encoding="UTF-8") as file:
         json.dump(data, file)
     
@@ -465,8 +484,10 @@ if newSync: # Search for a new manga and ask for storage choices
             info = 'last page'
         else:
             payload['offset'] = (page - 1) * payload['limit']
-            r = req.get(f"{base}/manga", params=payload)
-            data = r.json()
+            if isFollows:
+                data = get_follows()
+            else:
+                data = search()
         show_titles(data, info)
         mChoice = input(f"Choice (all if empty // space between values // +/- to change page): ")
     if mChoice:  
