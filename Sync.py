@@ -30,6 +30,7 @@ class Account:
     """classe qui gère le login et la validité du token, et renvoie le bearer de connexion"""
     def __init__(self, login_path=LOGIN_PATH) -> None:
         self.login_path = login_path
+        self.connected = False
         self._token = ""
         self.user = ""
         self._refresh_token = ""
@@ -60,6 +61,7 @@ class Account:
         if not self.check_token():
             self._token, self._refresh_token = self.__refresh_login()
         self.last_check = time()
+        self.connected = True
         return self._token
 
     def __login(self):
@@ -99,7 +101,7 @@ class Account:
     
     @property
     def bearer(self):
-        return {'Authorization': 'Bearer ' + self.token} if self.check_token() else {}
+        return {'Authorization': 'Bearer ' + self.token} if self.connected else {}
 
 def get_manga(*args):
     """
@@ -251,7 +253,7 @@ def get_chapter_data(*args):
             return []
         # else, setup an async client and gather the images
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
-        async with httpx.AsyncClient(headers=account.bearer) as client:
+        async with httpx.AsyncClient() as client:
             retries_left = 5
             tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
             reqs = await asyncio.gather(*tasks)   
