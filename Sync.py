@@ -36,6 +36,7 @@ class Account:
         self._refresh_token = ""
         self.connected = False
         self._refresh_token = ""
+        self.last_check = time() - 15 * 60
             
     def login(self):
         """front login func (console input)"""
@@ -44,18 +45,25 @@ class Account:
         self.user = username
         self.pwd = password
         self._token, self._refresh_token = self.__login()
-        with open(self.login_path, 'x+') as file:
+        self.last_check = time()
+        with open(self.login_path, 'w+' if os.path.exists(self.login_path) else 'x+') as file:
             txt = {
-                'token': self.token,
+                'token': self._token,
                 'refresh_token': self._refresh_token
             }
             json.dump(txt, file)
+        
+        return self._token, self._refresh_token
     
     def relogin(self, token: str, refresh_token: str):
         """front relogin func, using __refresh_token if necessary (if valid refresh token found at login_path)"""
         self._token = token
         self._refresh_token = refresh_token
-        return self.token
+        self.connected = True
+        if not self.__check_token():
+            self.__refresh_login()
+        self.last_check = time()
+        return self._token
 
     def __login(self):
         """back login func"""
@@ -76,6 +84,7 @@ class Account:
         self._in_check = True
         hdrs = self.bearer
         self._in_check = False
+        self.last_check = time()
         return req.get(f'{base}/auth/check', headers=hdrs).json()['isAuthenticated']
 
     def __refresh_login(self):
@@ -89,8 +98,9 @@ class Account:
 
     @property
     def token(self):
-        if not self._in_check and not self.__check_token():
-            self._token, self._refresh_token = self.__refresh_login()
+        if not self._in_check:
+            if time() - self.last_check > 14 * 60 or not self.__check_token():
+                self._token, self._refresh_token = self.__refresh_login()
         return self._token
     
     @property
@@ -101,6 +111,8 @@ def get_manga(*args):
     """
     called for each chapter concurrently, take care of doing the requests and saving the pages
     """
+    client = httpx.Client(headers=account.bearer)
+    #print(client.headers)
     (fsChoice, qChoice, idManga, name, presentChapters) = args
     payloadManga = {
         "translatedLanguage[]": [
@@ -113,19 +125,19 @@ def get_manga(*args):
     }  
     
     with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "w+", encoding="UTF-8") as file:
-        r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+        r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         while r3.status_code == 429:
             sleep(1.0)
-            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+            r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         mangaFeed = r3.json()
         chapters = mangaFeed['data']
         # if manga have 500+ chapters
         while mangaFeed['total'] > (len(mangaFeed['data']) + 500*mangaFeed['offset']):
             mangaFeed['offset'] += 1 
-            r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+            r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             while r3.status_code == 429:
                 sleep(1.0)
-                r3 = req.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
+                r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
             chapters += mangaFeed['data']
 
@@ -203,6 +215,7 @@ def get_chapter_data(*args):
     output : int : number of added images
     """
     (c, quality, name, fsChoice, idTask) = args
+    sync_client = httpx.Client(headers=account.bearer)
 
     async def request_images() -> list:
         """
@@ -212,12 +225,13 @@ def get_chapter_data(*args):
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter
         # Will make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+        rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000)
         
         while rServ.status_code == 429 or rServ.json()['result'] != 'ok': # request failed
             time_to_wait = float(rServ.headers['X-RateLimit-Retry-After']) - time()
             await asyncio.sleep(time_to_wait)
-            rServ = httpx.get(f"{base}/at-home/server/{id}", timeout=1000)
+            sync_client.headers = account.bearer # check if token is still valid
+            rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000)
             
         dataServer = rServ.json()
         baseServer = dataServer["baseUrl"]
@@ -239,7 +253,7 @@ def get_chapter_data(*args):
             return []
         # else, setup an async client and gather the images
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=account.bearer) as client:
             retries_left = 5
             tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
             reqs = await asyncio.gather(*tasks)   
