@@ -189,12 +189,28 @@ def get_manga(*args):
     with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
         newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
         newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
+        # get scan groups id list
+        grp_id_list = list(set([
+            [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]
+            for c in chapters
+        ]))
+        # get scan groups name by requests
+        rep = client.get(f"{base}/group", params={'limit': 100, 'ids[]': grp_id_list, "order[name]": "asc"})
+        grps = {group['attributes']['name']: group['id'] for group in rep.json()['data']}
+        # do a dict (id -> chapters)
+        grp_per_chaps = {name: [] for name,_ in grps.items()}
+        for grp_name, grp_id in grps.items():
+            for c in chapters:
+                if grp_id == [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]:
+                    grp_per_chaps[grp_name].append(c["attributes"]["chapter"])
+        
         mangaInfos = {
             "fileSys" : fsChoice,
             "format" : qChoice,
             "id": idManga,
             "name" : name,
-            "chapterList": presentChapters + newPresentChapters
+            "chapterList": presentChapters + newPresentChapters,
+            "scanlator groups, by chapters done (credits)" : grp_per_chaps
         }
         json.dump(mangaInfos, file)
 
@@ -384,7 +400,9 @@ if newSync: # Search for a new manga and ask for storage choices
         else:    
             print('[bold red]Choice is invalid')
         choice = input("Choice (0, 1 or 2 // default is 0) : ")
-    
+
+    isLink = False
+    isFollows = False
     if choice == '1':
         isLink = True
         isFollows = False
@@ -563,7 +581,7 @@ else: # Ask which manga(s) must be updated
             mangaInfos['chapterList'] = chapterList
             nChanges += 1
         with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
-                json.dump(mangaInfos, file)
+            json.dump(mangaInfos, file)
     print('[bold blue]Verification : {} changes to infos.json files have been made'.format((nChanges if nChanges else 'No')))
     if not isUpdate:
         exit()
