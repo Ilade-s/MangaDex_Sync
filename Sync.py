@@ -153,6 +153,7 @@ def get_manga(*args):
                 chapters.remove(c)
             else:
                 n = ni
+        all_chaps = [*chapters]
         chapters = [c for c in chapters if str(c["attributes"]["chapter"]) not in presentChapters]
 
     taskId = prgbar.add_task(name, total=len(chapters) if chapters else 1)
@@ -192,7 +193,7 @@ def get_manga(*args):
         # get scan groups id list
         grp_id_list = list(set([
             [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]
-            for c in chapters
+            for c in all_chaps
         ]))
         # get scan groups name by requests
         rep = client.get(f"{base}/group", params={'limit': 100, 'ids[]': grp_id_list, "order[name]": "asc"})
@@ -200,7 +201,7 @@ def get_manga(*args):
         # do a dict (id -> chapters)
         grp_per_chaps = {name: [] for name,_ in grps.items()}
         for grp_name, grp_id in grps.items():
-            for c in chapters:
+            for c in all_chaps:
                 if grp_id == [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]:
                     grp_per_chaps[grp_name].append(c["attributes"]["chapter"])
         

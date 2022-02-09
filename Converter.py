@@ -95,7 +95,10 @@ for m in titlelist:
             title = "NoTitle"
 
         if fsChoice: # FROM {vol}/{chap}/{page}.* to {vol}/{chap}-{page}.*
-            imgPaths = os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
+            try:
+                imgPaths = os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"))
+            except FileNotFoundError:
+                continue
             for img in imgPaths: # for each image
                 try:
                     with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
@@ -114,7 +117,10 @@ for m in titlelist:
                 pass
         # ==============================================================
         else: # FROM {vol}/{chap}-{page}.* to {vol}/{chap}/{page}.*
-            imgPaths = [img for img in os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}")) if img.split('-')[1] == chap]
+            try:
+                imgPaths = [img for img in os.listdir(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}")) if img.split('-')[1] == chap]
+            except FileNotFoundError:
+                continue
             for img in imgPaths: # for each image
                 # create folder
                 os.makedirs(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 
