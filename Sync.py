@@ -82,7 +82,9 @@ class Account:
     def check_token(self) -> bool:
         hdrs = {'Authorization': 'Bearer ' + self._token}
         self.last_check = time()
-        return req.get(f'{base}/auth/check', headers=hdrs).json()['isAuthenticated']
+        rep = req.get(f'{base}/auth/check', headers=hdrs).json()
+        #print(rep)
+        return rep['isAuthenticated']
 
     def __refresh_login(self):
         rep = req.post(f'{base}/auth/refresh', json={'token': self._refresh_token})
@@ -110,6 +112,22 @@ def get_manga(*args):
     client = httpx.Client(headers=account.bearer)
     #print(client.headers)
     (fsChoice, qChoice, idManga, name, presentChapters) = args
+
+    def update_infos():
+        with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
+            newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
+            newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
+
+            mangaInfos = {
+                "fileSys" : fsChoice,
+                "format" : qChoice,
+                "id": idManga,
+                "name" : name,
+                "chapterList": presentChapters + newPresentChapters,
+                "scanlator groups, by chapters done (credits)" : groups
+            }
+            json.dump(mangaInfos, file)
+
     payloadManga = {
         "translatedLanguage[]": [
             #"fr", 
@@ -117,7 +135,10 @@ def get_manga(*args):
         ],
         "limit": 500,
         "offset": 0,
-        "includeFutureUpdates": "0"
+        "includeFutureUpdates": "0",
+        "includes[]": ['scanlation_group'],
+        'order[volume]': 'asc',
+        'order[chapter]': 'asc'
     }  
     
     with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "w+", encoding="UTF-8") as file:
@@ -136,15 +157,22 @@ def get_manga(*args):
                 r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
             mangaFeed = r3.json()
             chapters += mangaFeed['data']
-
         json.dump(chapters, file)
-
+    # search all present scanlation groups for credits
+    groups = {}
+    for c in chapters:
+        group = [r['attributes']['name'] for r in c['relationships'] if r['type'] == 'scanlation_group']
+        if group:
+            group = group[0]
+            if group in groups.keys():
+                groups[group].append(c['attributes']['chapter'])
+            else:
+                groups[group] = [c['attributes']['chapter']]
+    for group_name, chaps in groups.items():
+        groups[group_name] = sorted(list(set(chaps)), key=lambda c: float(c) if c else 0)
+    # clean the list of chapters to 
     with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
         chapters = json.load(file)
-        # sort the list from the json to make loading of images in order
-        chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
-                                    if c["attributes"]["chapter"] != None
-                                    else 0))       
         # remove duplicates and already present chapters                     
         n = 'aaaaa'                           
         for c in chapters:
@@ -153,7 +181,6 @@ def get_manga(*args):
                 chapters.remove(c)
             else:
                 n = ni
-        all_chaps = [*chapters]
         chapters = [c for c in chapters if str(c["attributes"]["chapter"]) not in presentChapters]
 
     taskId = prgbar.add_task(name, total=len(chapters) if chapters else 1)
@@ -161,6 +188,7 @@ def get_manga(*args):
         prgbar.update(taskId, description=f'{name} (no new chapters)', advance=1)
         sleep(1.0)
         prgbar.remove_task(taskId)
+        update_infos()
         return
     # setup chapter tasks
     done_tasks = 0
@@ -187,37 +215,7 @@ def get_manga(*args):
         sleep(.1)
     while any([task.is_alive() for task in tasks]): sleep(.1)
 
-    with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
-        newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
-        newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
-        try:
-            # get scan groups id list
-            grp_id_list = list(set([
-                [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]
-                for c in all_chaps
-            ]))
-            # get scan groups name by requests
-            rep = client.get(f"{base}/group", params={'limit': 100, 'ids[]': grp_id_list, "order[name]": "asc"})
-            grps = {group['attributes']['name']: group['id'] for group in rep.json()['data']}
-            # do a dict (id -> chapters)
-            grp_per_chaps = {name: [] for name,_ in grps.items()}
-            for grp_name, grp_id in grps.items():
-                for c in all_chaps:
-                    if grp_id in [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"]:
-                        grp_per_chaps[grp_name].append(c["attributes"]["chapter"])
-        except Exception:
-            pass
-        
-        mangaInfos = {
-            "fileSys" : fsChoice,
-            "format" : qChoice,
-            "id": idManga,
-            "name" : name,
-            "chapterList": presentChapters + newPresentChapters,
-            "scanlator groups, by chapters done (credits)" : grp_per_chaps
-        }
-        json.dump(mangaInfos, file)
-
+    update_infos()
     prgbar.update(taskId, description=f'{name} ({len(chapters)} new chapters)', advance=1)
 
 def get_chapter_data(*args):
@@ -577,19 +575,21 @@ else: # Ask which manga(s) must be updated
             chapterList.extend(volChapList)
         chapterList = list(set(chapterList))
         chapterList.sort(key=lambda c: (float(c) if c != None and c != 'None' else 0))
+        with open(os.path.join(FOLDER_PATH, m, "chapters.json"), "r", encoding="UTF-8") as filec:
+            chapters = json.load(filec)
+            chapters = [c for c in chapters if c['attributes']['chapter'] in chapterList]
         if os.path.isfile(os.path.join(FOLDER_PATH, m, "infos.json")) and open(os.path.join(FOLDER_PATH, m, "infos.json")).read():
-            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
+            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r+", encoding="UTF-8") as file:
                 mangaInfos = json.load(file)
             if 'chapterList' not in mangaInfos.keys():
                 mangaInfos['chapterList'] = []
+                nChanges += 1
             elif chapterList != mangaInfos['chapterList']:
                 mangaInfos['chapterList'] = chapterList
-            nChanges += 1
+                nChanges += 1
+            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+                json.dump(mangaInfos, file)
         else:
-            with open(os.path.join(FOLDER_PATH, m, "chapters.json"), "r", encoding="UTF-8") as filec:
-                chapters = json.load(filec)
-                presentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
-                presentChapters.sort(key=lambda c: (float(c) if c != None else 0))
             chapter_path = os.path.join(FOLDER_PATH, m , 'chapters')
             vol_1 = os.path.join(chapter_path, os.listdir(chapter_path)[0])
             chap_1 = os.path.join(vol_1, os.listdir(vol_1)[0])
@@ -611,7 +611,7 @@ else: # Ask which manga(s) must be updated
                     "format" : Format,
                     "id": [r['id'] for r in chapters[0]["relationships"] if r['type'] == 'manga'][0],
                     "name" : m,
-                    "chapterList": presentChapters
+                    "chapterList": chapterList,
                 }
                 json.dump(mangaInfos, file)
             nChanges += 1
