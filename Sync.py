@@ -190,20 +190,23 @@ def get_manga(*args):
     with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
         newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
         newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
-        # get scan groups id list
-        grp_id_list = list(set([
-            [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]
-            for c in all_chaps
-        ]))
-        # get scan groups name by requests
-        rep = client.get(f"{base}/group", params={'limit': 100, 'ids[]': grp_id_list, "order[name]": "asc"})
-        grps = {group['attributes']['name']: group['id'] for group in rep.json()['data']}
-        # do a dict (id -> chapters)
-        grp_per_chaps = {name: [] for name,_ in grps.items()}
-        for grp_name, grp_id in grps.items():
-            for c in all_chaps:
-                if grp_id == [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]:
-                    grp_per_chaps[grp_name].append(c["attributes"]["chapter"])
+        try:
+            # get scan groups id list
+            grp_id_list = list(set([
+                [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"][0]
+                for c in all_chaps
+            ]))
+            # get scan groups name by requests
+            rep = client.get(f"{base}/group", params={'limit': 100, 'ids[]': grp_id_list, "order[name]": "asc"})
+            grps = {group['attributes']['name']: group['id'] for group in rep.json()['data']}
+            # do a dict (id -> chapters)
+            grp_per_chaps = {name: [] for name,_ in grps.items()}
+            for grp_name, grp_id in grps.items():
+                for c in all_chaps:
+                    if grp_id in [r['id'] for r in c["relationships"] if r['type'] == "scanlation_group"]:
+                        grp_per_chaps[grp_name].append(c["attributes"]["chapter"])
+        except Exception:
+            pass
         
         mangaInfos = {
             "fileSys" : fsChoice,
@@ -574,15 +577,44 @@ else: # Ask which manga(s) must be updated
             chapterList.extend(volChapList)
         chapterList = list(set(chapterList))
         chapterList.sort(key=lambda c: (float(c) if c != None and c != 'None' else 0))
-        with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
-            mangaInfos = json.load(file)
-        if 'chapterList' not in mangaInfos.keys():
-            mangaInfos['chapterList'] = []
-        elif chapterList != mangaInfos['chapterList']:
-            mangaInfos['chapterList'] = chapterList
+        if os.path.isfile(os.path.join(FOLDER_PATH, m, "infos.json")) and open(os.path.join(FOLDER_PATH, m, "infos.json")).read():
+            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
+                mangaInfos = json.load(file)
+            if 'chapterList' not in mangaInfos.keys():
+                mangaInfos['chapterList'] = []
+            elif chapterList != mangaInfos['chapterList']:
+                mangaInfos['chapterList'] = chapterList
             nChanges += 1
-        with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
-            json.dump(mangaInfos, file)
+        else:
+            with open(os.path.join(FOLDER_PATH, m, "chapters.json"), "r", encoding="UTF-8") as filec:
+                chapters = json.load(filec)
+                presentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
+                presentChapters.sort(key=lambda c: (float(c) if c != None else 0))
+            chapter_path = os.path.join(FOLDER_PATH, m , 'chapters')
+            vol_1 = os.path.join(chapter_path, os.listdir(chapter_path)[0])
+            chap_1 = os.path.join(vol_1, os.listdir(vol_1)[0])
+            fSys = 1 if os.path.isfile(chap_1) else 0
+            if fSys: # vol/chap-page
+                if chap_1.split('.')[-1] == 'png':
+                    Format = 1
+                else:
+                    Format = 0
+            else: # vol/chap/page
+                page_1 = os.path.join(chap_1, os.listdir(chap_1)[0])
+                if page_1.split('.')[-1] == 'png':
+                    Format = 1
+                else:
+                    Format = 0
+            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+                mangaInfos = {
+                    "fileSys" : fSys,
+                    "format" : Format,
+                    "id": [r['id'] for r in chapters[0]["relationships"] if r['type'] == 'manga'][0],
+                    "name" : m,
+                    "chapterList": presentChapters
+                }
+                json.dump(mangaInfos, file)
+            nChanges += 1
     print('[bold blue]Verification : {} changes to infos.json files have been made'.format((nChanges if nChanges else 'No')))
     if not isUpdate:
         exit()
@@ -600,7 +632,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
         if name not in os.listdir(FOLDER_PATH):
             os.makedirs(os.path.join(FOLDER_PATH, name), exist_ok=True)
         try:
-            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "x+", encoding="UTF-8") as file:
+            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fsChoice,
                     "format" : qChoice,
