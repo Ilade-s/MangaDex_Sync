@@ -45,7 +45,7 @@ class Account:
         self.pwd = password
         self._token, self._refresh_token = self.__login()
         self.last_check = time()
-        with open(self.login_path, 'w+' if os.path.exists(self.login_path) else 'x+') as file:
+        with io.open(self.login_path, 'w+' if os.path.exists(self.login_path) else 'x+') as file:
             txt = {
                 'token': self._token,
                 'refresh_token': self._refresh_token
@@ -114,7 +114,7 @@ def get_manga(*args):
     (fsChoice, qChoice, idManga, name, presentChapters) = args
 
     def update_infos():
-        with open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
+        with io.open(f"{FOLDER_PATH}/{name}/infos.json", "w+", encoding="UTF-8") as file: # updates infos.json for new chapters
             newPresentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
             newPresentChapters.sort(key=lambda c: (float(c) if c != None else 0))
 
@@ -141,7 +141,7 @@ def get_manga(*args):
         'order[chapter]': 'asc'
     }  
     
-    with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "w+", encoding="UTF-8") as file:
+    with io.open(os.path.join(FOLDER_PATH, name, "chapters.json"), "w+", encoding="UTF-8") as file:
         r3 = client.get(f"{base}/manga/{idManga}/feed", params=payloadManga)
         while r3.status_code == 429:
             sleep(1.0)
@@ -171,7 +171,7 @@ def get_manga(*args):
     for group_name, chaps in groups.items():
         groups[group_name] = sorted(list(set(chaps)), key=lambda c: float(c) if c else 0)
     # clean the list of chapters to 
-    with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
+    with io.open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # remove duplicates and already present chapters                     
         n = 'aaaaa'                           
@@ -240,7 +240,7 @@ def get_chapter_data(*args):
         baseServer = 'https://uploads.mangadex.org'
         # Ask an adress for M@H for each chapter
         # Will make sure it will always use the good adress, but is rate limited at 40 reqs/min and slow to do
-        rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000, params=atHome_payload)
+        rServ = sync_client.get(f"{base}/at-home/server/{id}", params=atHome_payload)
         
         while rServ.status_code == 429 or rServ.json()['result'] != 'ok': # request failed
             if 'X-RateLimit-Retry-After' in rServ.headers.keys():
@@ -249,7 +249,7 @@ def get_chapter_data(*args):
                 time_to_wait = 10.0
             await asyncio.sleep(time_to_wait)
             #sync_client.headers = account.bearer # check if token is still valid
-            rServ = sync_client.get(f"{base}/at-home/server/{id}", timeout=1000, params=atHome_payload)
+            rServ = sync_client.get(f"{base}/at-home/server/{id}", params=atHome_payload)
             
         dataServer = rServ.json()
         baseServer = dataServer["baseUrl"]
@@ -271,31 +271,39 @@ def get_chapter_data(*args):
             return []
         # else, setup an async client and gather the images
         adress = f"{baseServer}/data/{hash}/" if quality else f"{baseServer}/data-saver/{hash}"
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(base_url=adress, timeout=1000) as client:
             retries_left = 5
             try:
-                tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
+                tasks = (client.get(f"/{img}") for img in imgsToGet)  
                 reqs = await asyncio.gather(*tasks)   
                 status_code_errors = [req.status_code for req in reqs if str(req.status_code)[0] != '2']
             except httpx.ReadError:
-                status_code_errors = []
+                status_code_errors = ['read error']
+            except httpx.ConnectTimeout:
+                status_code_errors = ['connect timeout']
+            except httpx.RemoteProtocolError:
+                status_code_errors = ['remote protocol error']
+
             while status_code_errors and retries_left:
                 print(f'An exception occurred when gathering chap {chap} images with the status code(s) {", ".join(status_code_errors)} (will retry {retries_left} more times)')
                 retries_left -= 1
                 await asyncio.sleep(1)
                 try:
-                    tasks = (client.get(f"{adress}/{img}", timeout=1000) for img in imgsToGet)  
+                    tasks = (client.get(f"/{img}") for img in imgsToGet)  
                     reqs = await asyncio.gather(*tasks)   
                     status_code_errors = [req.status_code for req in reqs if str(req.status_code)[0] != '2']
                 except httpx.ReadError:
-                    pass
-            
+                    status_code_errors = ['read error']
+                except httpx.ConnectTimeout:
+                    status_code_errors = ['connect timeout']
+                except httpx.RemoteProtocolError:
+                    status_code_errors = ['remote protocol error']
             if status_code_errors:
                 print(f"Chap {chap} ignored because 5 exceptions occured")
                 images = []
             else:
                 images = [rep.content for rep in reqs]
-
+ 
         return images
 
     # chapter infos
@@ -312,7 +320,11 @@ def get_chapter_data(*args):
         title = "NoTitle"
     # check for already downloaded images in directory
     loop = asyncio.new_event_loop()
-    images = loop.run_until_complete(request_images())
+    try:
+        images = loop.run_until_complete(request_images())
+    except RuntimeError as e:
+        print("image gathering for chapter {} encountered an error when closing (will be skipped) : {} ".format(chap, e))
+        images = []
 
     prgbar.update(idTask, description=f'{name} (vol {vol} chap {chap})', advance=1)
     task = Thread(target=save_chapter, args=(images, name, vol, chap, title, fileFormat, fsChoice))
@@ -338,7 +350,7 @@ def save_chapter(*args) -> int:
                     os.makedirs(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}")) # create folder
                 except Exception:
                     pass
-                with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{images.index(img)+1}.{fileFormat}"), "x+") as file:
                     # write data to file
                     file.buffer.write(img)
             else:
@@ -349,7 +361,7 @@ def save_chapter(*args) -> int:
                     os.makedirs(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}")) # create folder
                 except Exception:
                     pass
-                with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
+                with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{images.index(img)+1}.{fileFormat}"), "x+") as file:
                     # write data to file
                     file.buffer.write(img)
             new_imgs += 1
@@ -369,7 +381,7 @@ print("============================================")
 # LOGIN ===========================
 account = Account() 
 if os.path.exists(LOGIN_PATH):
-    with open(LOGIN_PATH, 'r') as file:
+    with io.open(LOGIN_PATH, 'r') as file:
         content = file.read()
         if content: # token found
             print('[bold green]login tokens found...')
@@ -474,7 +486,7 @@ if newSync: # Search for a new manga and ask for storage choices
     else:
         data = search()
     
-    with open("search.json", "w+", encoding="UTF-8") as file:
+    with io.open("search.json", "w+", encoding="UTF-8") as file:
         json.dump(data, file)
     
     page = 1
@@ -581,11 +593,11 @@ else: # Ask which manga(s) must be updated
             chapterList.extend(volChapList)
         chapterList = list(set(chapterList))
         chapterList.sort(key=lambda c: (float(c) if c != None and c != 'None' else 0))
-        with open(os.path.join(FOLDER_PATH, m, "chapters.json"), "r", encoding="UTF-8") as filec:
+        with io.open(os.path.join(FOLDER_PATH, m, "chapters.json"), "r", encoding="UTF-8") as filec:
             chapters = json.load(filec)
             chapters = [c for c in chapters if c['attributes']['chapter'] in chapterList]
-        if os.path.isfile(os.path.join(FOLDER_PATH, m, "infos.json")) and open(os.path.join(FOLDER_PATH, m, "infos.json")).read():
-            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r+", encoding="UTF-8") as file:
+        if os.path.isfile(os.path.join(FOLDER_PATH, m, "infos.json")) and io.open(os.path.join(FOLDER_PATH, m, "infos.json")).read():
+            with io.open(os.path.join(FOLDER_PATH, m, "infos.json"), "r+", encoding="UTF-8") as file:
                 mangaInfos = json.load(file)
             if 'chapterList' not in mangaInfos.keys():
                 mangaInfos['chapterList'] = []
@@ -593,7 +605,7 @@ else: # Ask which manga(s) must be updated
             elif chapterList != mangaInfos['chapterList']:
                 mangaInfos['chapterList'] = chapterList
                 nChanges += 1
-            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+            with io.open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
                 json.dump(mangaInfos, file)
         else:
             chapter_path = os.path.join(FOLDER_PATH, m , 'chapters')
@@ -611,7 +623,7 @@ else: # Ask which manga(s) must be updated
                     Format = 1
                 else:
                     Format = 0
-            with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
+            with io.open(os.path.join(FOLDER_PATH, m, "infos.json"), "w+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fSys,
                     "format" : Format,
@@ -638,7 +650,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
         if name not in os.listdir(FOLDER_PATH):
             os.makedirs(os.path.join(FOLDER_PATH, name), exist_ok=True)
         try:
-            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
+            with io.open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fsChoice,
                     "format" : qChoice,
@@ -651,7 +663,7 @@ def get_param_manga(m, fsChoice='', qChoice=''):
     
     else:
         name = m
-        with open(os.path.join(FOLDER_PATH, name, "infos.json"), "r", encoding="UTF-8") as file:
+        with io.open(os.path.join(FOLDER_PATH, name, "infos.json"), "r", encoding="UTF-8") as file:
             mangaInfos = json.load(file)
         idManga = mangaInfos["id"]
         qChoice = mangaInfos["format"]
@@ -659,14 +671,14 @@ def get_param_manga(m, fsChoice='', qChoice=''):
         if "chapterList" in mangaInfos.keys(): # updated infos.json
             presentChapters = mangaInfos["chapterList"]
         else: # old infos.json, need to add present chapters
-            with open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
+            with io.open(os.path.join(FOLDER_PATH, name, "chapters.json"), "r", encoding="UTF-8") as file:
                 chapters = json.load(file)   
                 chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
                                     if c["attributes"]["chapter"] != None 
                                     else 0))      
                 presentChapters = list(set([chapter["attributes"]["chapter"] for chapter in chapters]))
                 presentChapters.sort(key=lambda c: (float(c) if c != None else 0))
-            with open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
+            with io.open(os.path.join(FOLDER_PATH, name, "infos.json"), "w+", encoding="UTF-8") as file:
                 mangaInfos = {
                     "fileSys" : fsChoice,
                     "format" : qChoice,

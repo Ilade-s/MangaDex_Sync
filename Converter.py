@@ -40,7 +40,7 @@ else:
 # for each manga
 for m in titlelist:
     print(f"[bold blue]{m}[/bold blue]")
-    with open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
+    with io.open(os.path.join(FOLDER_PATH, m, "infos.json"), "r", encoding="UTF-8") as file:
         mangaInfos = json.load(file)
 
     idManga = mangaInfos["id"]
@@ -58,11 +58,11 @@ for m in titlelist:
         continue
 
     mangaInfos["fileSys"] = fsChoice
-    with open(os.path.join(FOLDER_PATH, m, "infos.json"), "w", encoding="UTF-8") as file:
+    with io.open(os.path.join(FOLDER_PATH, m, "infos.json"), "w", encoding="UTF-8") as file:
         json.dump(mangaInfos, file)
             
 
-    with open(f"{FOLDER_PATH}/{name}/chapters.json", "r", encoding="UTF-8") as file:
+    with io.open(f"{FOLDER_PATH}/{name}/chapters.json", "r", encoding="UTF-8") as file:
         chapters = json.load(file)
         # sort the list from the json to make loading of images in order
         chapters.sort(key=lambda c: (float(c["attributes"]["chapter"]) 
@@ -101,9 +101,9 @@ for m in titlelist:
                 continue
             for img in imgPaths: # for each image
                 try:
-                    with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
+                    with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile:
                         try:
-                            with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
+                            with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file:
                                 file.buffer.write(ofile.buffer.read()) 
                         except FileExistsError:
                             pass
@@ -125,9 +125,9 @@ for m in titlelist:
                 # create folder
                 os.makedirs(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}"), exist_ok=True) 
                 try:
-                    with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile: # or jpg for smaller size
+                    with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}-p{imgPaths.index(img)+1}.{fileFormat}"), "r+") as ofile: # or jpg for smaller size
                         try:
-                            with open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file: # or jpg for smaller size
+                            with io.open(os.path.join(FOLDER_PATH, name, "chapters", f"vol-{vol}", f"chap-{chap}-{title}", f"page-{imgPaths.index(img)+1}.{fileFormat}"), "x+") as file: # or jpg for smaller size
                                 file.buffer.write(ofile.buffer.read()) 
                         except FileExistsError as e:
                             pass
