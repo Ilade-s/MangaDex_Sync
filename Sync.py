@@ -14,6 +14,7 @@ Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
 
 import httpx # async requests
 import requests as req
+import jwt
 from rich import print # pretty print
 from rich.progress import * # progress bar
 import json # json handling
@@ -32,19 +33,15 @@ class Account:
         self.login_path = login_path
         self.connected = False
         self._token = ""
-        self.user = ""
         self._refresh_token = ""
-        self._refresh_token = ""
-        self.last_check = time() - 15 * 60
             
     def login(self):
         """front login func (console input)"""
         username = input('username : ')
         password = getpass('password : ')   
-        self.user = username
-        self.pwd = password
+        self._user = username
+        self._pwd = password
         self._token, self._refresh_token = self.__login()
-        self.last_check = time()
         with io.open(self.login_path, 'w+' if os.path.exists(self.login_path) else 'x+') as file:
             txt = {
                 'token': self._token,
@@ -58,18 +55,17 @@ class Account:
         """front relogin func, using __refresh_token if necessary (if valid refresh token found at login_path)"""
         self._token = token
         self._refresh_token = refresh_token
-        if not self.check_token():
+        if self.isExpired:
             self._token, self._refresh_token = self.__refresh_login()
-        self.last_check = time()
         self.connected = True
         return self._token
 
-    def __login(self):
+    def __login(self) -> tuple[str, str]:
         """back login func"""
         payload = {
-            'username': self.user,
-            'email': self.user,
-            'password': self.pwd
+            'username': self._user,
+            'email': self._user,
+            'password': self._pwd
         }
 
         rep = req.post(f'{base}/auth/login', json=payload)
@@ -79,13 +75,6 @@ class Account:
         self.connected = True
         return repJson['token']['session'], repJson['token']['refresh']
 
-    def check_token(self) -> bool:
-        hdrs = {'Authorization': 'Bearer ' + self._token}
-        self.last_check = time()
-        rep = req.get(f'{base}/auth/check', headers=hdrs).json()
-        #print(rep)
-        return rep['isAuthenticated']
-
     def __refresh_login(self):
         rep = req.post(f'{base}/auth/refresh', json={'token': self._refresh_token})
         repJson = rep.json()
@@ -93,16 +82,24 @@ class Account:
             return repJson['token']['session'], repJson['token']['refresh']
         else:
             return self.__login() if self.user else self.login()
+    
+    @property
+    def isExpired(self) -> bool:
+        token = self._token
+        try:
+            data = jwt.decode(token, algorithms=["RS256"], options={"verify_signature": False})
+        except jwt.DecodeError:
+            return True
+        return time() > data['exp']
 
     @property
-    def token(self):
-        if time() - self.last_check > 14 * 60:
-            if not self.check_token():
-                self._token, self._refresh_token = self.__refresh_login()
+    def token(self) -> str:
+        if self.isExpired:
+            self._token, self._refresh_token = self.__refresh_login()
         return self._token
     
     @property
-    def bearer(self):
+    def bearer(self) -> dict[str, str]:
         return {'Authorization': 'Bearer ' + self.token} if self.connected else {}
 
 def get_manga(*args):
@@ -414,7 +411,7 @@ if newSync: # Search for a new manga and ask for storage choices
     print("\t- 2 : Import user follows (login required)")
     print("============================================")
     choice = input("Choice (0, 1 or 2 // default is 0) : ")
-    while not (choice == '0' or choice == '1' or (choice == '2' and account.check_token())):
+    while not (choice == '0' or choice == '1' or (choice == '2' and not account.isExpired)):
         if choice == '2':
             print('[bold red]Not logged in')
         else:    
