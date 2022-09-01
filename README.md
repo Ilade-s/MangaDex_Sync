@@ -1,4 +1,5 @@
 # MangaDex_Sync
+# This projet, while more or less working as intended, is, in my opinion, in a dire need of a near complete overhaul, both in interface, and programming wise. I might start the work soon (or not). As a result, anyone familiar with python, and willing to help, is welcome, to help me start the work, if I didn't already. The rewriting will be done in a separate branch
 Simple script using the MangaDex public API to search and get/sync mangas and store it in folders (now fully async !) :
     
     - don't have to be logged in to use it
