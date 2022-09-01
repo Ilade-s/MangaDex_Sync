@@ -12,6 +12,7 @@ Link to the MangaDex API documentation : https://api.mangadex.org/docs.html
     Made by Merlet Raphael, 2021
 """
 
+
 import httpx # async requests
 import requests as req
 import jwt
@@ -34,6 +35,7 @@ class Account:
         self.connected = False
         self._token = ""
         self._refresh_token = ""
+        self._user = ""
             
     def login(self):
         """front login func (console input)"""
@@ -81,7 +83,7 @@ class Account:
         if repJson['result'] == 'ok':
             return repJson['token']['session'], repJson['token']['refresh']
         else:
-            return self.__login() if self.user else self.login()
+            return self.__login() if self._user else self.login()
     
     @property
     def isExpired(self) -> bool:
